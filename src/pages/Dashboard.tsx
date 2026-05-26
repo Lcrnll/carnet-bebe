@@ -207,20 +207,24 @@ export function Dashboard({ data, onRefresh }: Props) {
             <div className="text-5xl mb-3">👶</div>
             <h2 className="text-lg font-semibold text-gray-800 mb-2">Bienvenue !</h2>
             <p className="text-sm text-gray-500 mb-4">
-              Commencez par renseigner le profil de votre bébé pour accéder à toutes les fonctionnalités.
+              Commencez par renseigner le profil de votre bébé, ou activez la synchronisation si vous avez déjà des données sur un autre appareil.
             </p>
             <button
               onClick={() => setShowEdit(true)}
-              className="bg-gradient-to-r from-pink-400 to-purple-400 text-white px-6 py-2.5 rounded-xl font-medium text-sm"
+              className="w-full bg-gradient-to-r from-pink-400 to-purple-400 text-white px-6 py-2.5 rounded-xl font-medium text-sm mb-2"
             >
               Créer le profil
             </button>
+            <p className="text-xs text-gray-400">
+              Données déjà existantes ? →{' '}
+              <span className="text-pink-400 font-medium">Réglages ⚙️ → Activer la synchronisation</span>
+            </p>
           </Card>
         )}
       </div>
 
       {/* Edit profile modal */}
-      <Modal open={showEdit} title="Profil de bébé" onClose={() => profile && setShowEdit(false)}>
+      <Modal open={showEdit} title="Profil de bébé" onClose={() => setShowEdit(false)}>
         <FormField label="Prénom *" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Zoé" required />
         <FormField label="Date de naissance *" type="date" value={form.birthDate} onChange={v => setForm(f => ({ ...f, birthDate: v }))} required />
         <FormField label="Poids à la naissance (g)" type="number" value={form.birthWeight || ''} onChange={v => setForm(f => ({ ...f, birthWeight: Number(v) }))} placeholder="3200" step="1" min="0" />
