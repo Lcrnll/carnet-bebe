@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+body {
+  background-color: #fdf2f8;
+  font-family: system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  margin: 0;
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+html { scroll-behavior: smooth; }
+
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #f9a8d4; border-radius: 2px; }
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.slide-up { animation: slideUp 0.25s ease-out; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fade-in { animation: fadeIn 0.2s ease-out; }
