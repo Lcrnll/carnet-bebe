@@ -4,6 +4,7 @@ export interface BabyProfile {
   birthWeight: number; // grams
   birthHeight: number; // cm
   birthHeadCirc: number; // cm
+  bloodType?: string;
   updatedAt?: string;
 }
 

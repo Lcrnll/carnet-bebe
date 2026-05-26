@@ -84,9 +84,19 @@ export function deleteAppointment(id: string) {
   save(d);
 }
 
+export function addVaccine(v: Vaccine) {
+  const d = load();
+  d.vaccines = [...d.vaccines, { ...v, updatedAt: now() }];
+  save(d);
+}
 export function updateVaccine(v: Vaccine) {
   const d = load();
   d.vaccines = d.vaccines.map(x => x.id === v.id ? { ...v, updatedAt: now() } : x);
+  save(d);
+}
+export function deleteVaccine(id: string) {
+  const d = addDeleted(id);
+  d.vaccines = d.vaccines.filter(x => x.id !== id);
   save(d);
 }
 

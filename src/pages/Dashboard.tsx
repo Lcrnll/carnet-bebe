@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { differenceInWeeks, differenceInMonths, format, parseISO, addMonths, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Baby, Scale, Ruler, Calendar, Shield, Edit2, Check } from 'lucide-react';
+import { Scale, Ruler, Calendar, Shield, Edit2, Check } from 'lucide-react';
 import type { AppData, BabyProfile } from '../types';
 import { saveProfile } from '../storage';
 import { Card } from '../components/Card';
 import { Modal } from '../components/Modal';
-import { FormField } from '../components/FormField';
+import { FormField, SelectField } from '../components/FormField';
 
 interface Props { data: AppData; onRefresh: () => void; }
+
+const BLOOD_TYPES = ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 function getAge(birthDate: string) {
   const bd = parseISO(birthDate);
@@ -40,15 +42,17 @@ function getNextAppointment(data: AppData) {
   return upcoming[0] || null;
 }
 
-function getLastWeight(data: AppData) {
-  const entries = [...data.growth].filter(g => g.weight).sort((a, b) => b.date.localeCompare(a.date));
+function getLastMeasure(data: AppData, field: 'weight' | 'height') {
+  const entries = [...data.growth]
+    .filter(g => g[field] !== undefined)
+    .sort((a, b) => b.date.localeCompare(a.date));
   return entries[0] || null;
 }
 
 export function Dashboard({ data, onRefresh }: Props) {
   const [showEdit, setShowEdit] = useState(!data.profile);
   const [form, setForm] = useState<BabyProfile>(data.profile || {
-    name: '', birthDate: '', birthWeight: 0, birthHeight: 0, birthHeadCirc: 0,
+    name: '', birthDate: '', birthWeight: 0, birthHeight: 0, birthHeadCirc: 0, bloodType: '',
   });
 
   const handleSave = () => {
@@ -58,8 +62,14 @@ export function Dashboard({ data, onRefresh }: Props) {
     setShowEdit(false);
   };
 
+  const openEdit = () => {
+    setForm(profile || { name: '', birthDate: '', birthWeight: 0, birthHeight: 0, birthHeadCirc: 0, bloodType: '' });
+    setShowEdit(true);
+  };
+
   const profile = data.profile;
-  const lastWeight = getLastWeight(data);
+  const lastWeight = getLastMeasure(data, 'weight');
+  const lastHeight = getLastMeasure(data, 'height');
   const nextVaccine = profile ? getNextVaccine(data) : null;
   const nextAppt = profile ? getNextAppointment(data) : null;
 
@@ -74,15 +84,19 @@ export function Dashboard({ data, onRefresh }: Props) {
               {profile ? `💕 ${profile.name}` : 'Bébé'}
             </h1>
             {profile && (
-              <p className="text-pink-100 mt-1 text-sm">
-                Née le {format(parseISO(profile.birthDate), 'd MMMM yyyy', { locale: fr })}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                <p className="text-pink-100 text-sm">
+                  Née le {format(parseISO(profile.birthDate), 'd MMMM yyyy', { locale: fr })}
+                </p>
+                {profile.bloodType && (
+                  <span className="bg-white/25 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    🩸 {profile.bloodType}
+                  </span>
+                )}
+              </div>
             )}
           </div>
-          <button
-            onClick={() => { setForm(profile || { name: '', birthDate: '', birthWeight: 0, birthHeight: 0, birthHeadCirc: 0 }); setShowEdit(true); }}
-            className="bg-white/20 backdrop-blur p-2 rounded-full hover:bg-white/30 transition-colors"
-          >
+          <button onClick={openEdit} className="bg-white/20 backdrop-blur p-2 rounded-full hover:bg-white/30 transition-colors">
             <Edit2 size={18} />
           </button>
         </div>
@@ -99,9 +113,9 @@ export function Dashboard({ data, onRefresh }: Props) {
       </div>
 
       <div className="px-4 -mt-4 space-y-3">
-        {/* Quick stats */}
+        {/* Quick stats — poids + taille */}
         {profile && (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Card className="p-3 text-center">
               <Scale size={20} className="text-pink-400 mx-auto mb-1" />
               <p className="text-xs text-gray-500">Dernier poids</p>
@@ -110,16 +124,19 @@ export function Dashboard({ data, onRefresh }: Props) {
                   ? `${(lastWeight.weight / 1000).toFixed(2)} kg`
                   : `${(profile.birthWeight / 1000).toFixed(2)} kg`}
               </p>
+              <p className="text-xs text-gray-400">
+                {lastWeight ? format(parseISO(lastWeight.date), 'd MMM', { locale: fr }) : 'naissance'}
+              </p>
             </Card>
             <Card className="p-3 text-center">
               <Ruler size={20} className="text-purple-400 mx-auto mb-1" />
-              <p className="text-xs text-gray-500">Naissance</p>
-              <p className="text-sm font-bold text-gray-800">{profile.birthHeight} cm</p>
-            </Card>
-            <Card className="p-3 text-center">
-              <Baby size={20} className="text-rose-400 mx-auto mb-1" />
-              <p className="text-xs text-gray-500">Périm. crânien</p>
-              <p className="text-sm font-bold text-gray-800">{profile.birthHeadCirc} cm</p>
+              <p className="text-xs text-gray-500">Dernière taille</p>
+              <p className="text-sm font-bold text-gray-800">
+                {lastHeight?.height ? `${lastHeight.height} cm` : `${profile.birthHeight} cm`}
+              </p>
+              <p className="text-xs text-gray-400">
+                {lastHeight ? format(parseISO(lastHeight.date), 'd MMM', { locale: fr }) : 'naissance'}
+              </p>
             </Card>
           </div>
         )}
@@ -203,12 +220,18 @@ export function Dashboard({ data, onRefresh }: Props) {
       </div>
 
       {/* Edit profile modal */}
-      <Modal open={showEdit} title="Profil de bébé" onClose={() => setShowEdit(false)}>
+      <Modal open={showEdit} title="Profil de bébé" onClose={() => profile && setShowEdit(false)}>
         <FormField label="Prénom *" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Zoé" required />
         <FormField label="Date de naissance *" type="date" value={form.birthDate} onChange={v => setForm(f => ({ ...f, birthDate: v }))} required />
         <FormField label="Poids à la naissance (g)" type="number" value={form.birthWeight || ''} onChange={v => setForm(f => ({ ...f, birthWeight: Number(v) }))} placeholder="3200" step="1" min="0" />
         <FormField label="Taille à la naissance (cm)" type="number" value={form.birthHeight || ''} onChange={v => setForm(f => ({ ...f, birthHeight: Number(v) }))} placeholder="50" step="0.1" min="0" />
         <FormField label="Périmètre crânien à la naissance (cm)" type="number" value={form.birthHeadCirc || ''} onChange={v => setForm(f => ({ ...f, birthHeadCirc: Number(v) }))} placeholder="34" step="0.1" min="0" />
+        <SelectField
+          label="Groupe sanguin"
+          value={form.bloodType ?? ''}
+          onChange={v => setForm(f => ({ ...f, bloodType: v }))}
+          options={BLOOD_TYPES.map(t => ({ value: t, label: t || 'Inconnu' }))}
+        />
         <button
           onClick={handleSave}
           disabled={!form.name || !form.birthDate}

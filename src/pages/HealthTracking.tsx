@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Plus, Trash2, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, Activity } from 'lucide-react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import type { AppData, GrowthEntry } from '../types';
 import { addGrowth, deleteGrowth, uid } from '../storage';
+import { WHO_WEIGHT_GIRLS, WHO_HEIGHT_GIRLS } from '../data/who';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
 import { Modal } from '../components/Modal';
@@ -18,6 +19,7 @@ type Tab = 'poids' | 'taille' | 'crâne';
 
 export function HealthTracking({ data, onRefresh }: Props) {
   const [tab, setTab] = useState<Tab>('poids');
+  const [showWHO, setShowWHO] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ date: format(new Date(), 'yyyy-MM-dd'), weight: '', height: '', headCirc: '', notes: '' });
 
@@ -25,8 +27,8 @@ export function HealthTracking({ data, onRefresh }: Props) {
     const entry: GrowthEntry = {
       id: uid(),
       date: form.date,
-      weight: form.weight ? Number(form.weight) : undefined,
-      height: form.height ? Number(form.height) : undefined,
+      weight:   form.weight   ? Number(form.weight)   : undefined,
+      height:   form.height   ? Number(form.height)   : undefined,
       headCirc: form.headCirc ? Number(form.headCirc) : undefined,
       notes: form.notes,
     };
@@ -38,23 +40,56 @@ export function HealthTracking({ data, onRefresh }: Props) {
 
   const sorted = [...data.growth].sort((a, b) => a.date.localeCompare(b.date));
 
-  const chartData = sorted.map(g => {
-    const bd = data.profile?.birthDate;
-    const label = bd
-      ? `J+${differenceInDays(parseISO(g.date), parseISO(bd))}`
-      : format(parseISO(g.date), 'dd/MM');
+  /* ── Données bébé en mois ── */
+  const birthDate = data.profile?.birthDate;
+  const babyPoints = sorted.map(g => {
+    const ageMonths = birthDate
+      ? differenceInDays(parseISO(g.date), parseISO(birthDate)) / 30.4375
+      : 0;
     return {
-      name: label,
-      poids: g.weight ? +(g.weight / 1000).toFixed(3) : undefined,
+      month: Math.round(ageMonths * 10) / 10,
+      poids:  g.weight   ? +(g.weight / 1000).toFixed(3) : undefined,
       taille: g.height,
-      crâne: g.headCirc,
+      crâne:  g.headCirc,
     };
   });
 
-  const tabs: Tab[] = ['poids', 'taille', 'crâne'];
-  const colors = { poids: '#f472b6', taille: '#a855f7', crâne: '#60a5fa' };
-  const units = { poids: 'kg', taille: 'cm', crâne: 'cm' };
+  /* ── Données chart (avec ou sans OMS) ── */
+  const whoData = tab === 'poids' ? WHO_WEIGHT_GIRLS : tab === 'taille' ? WHO_HEIGHT_GIRLS : null;
+  const WHO_MONTHS = [0,1,2,3,4,5,6,7,8,9,10,11,12,15,18,21,24];
 
+  const chartData = (() => {
+    if (showWHO && whoData && birthDate) {
+      const babyMonthSet = new Set(babyPoints.map(b => b.month));
+      const allMonths = [...new Set([...WHO_MONTHS, ...babyPoints.map(b => b.month)])].sort((a, b) => a - b);
+      return allMonths.map(m => {
+        const whoPoint = whoData.find(w => w.month === m);
+        const babyPoint = babyPoints.find(b => b.month === m);
+        const isWhoMonth = WHO_MONTHS.includes(m);
+        return {
+          month: m,
+          label: Number.isInteger(m) ? `${m}m` : `${m.toFixed(1)}m`,
+          bebe:  babyPoint?.[tab],
+          p3:    isWhoMonth ? whoPoint?.p3   : undefined,
+          p50:   isWhoMonth ? whoPoint?.p50  : undefined,
+          p97:   isWhoMonth ? whoPoint?.p97  : undefined,
+          isBabyOnly: !isWhoMonth && babyMonthSet.has(m),
+        };
+      });
+    }
+    // Sans OMS : axe en mois si profil connu, sinon J+X
+    return sorted.map(g => ({
+      month: 0,
+      label: birthDate
+        ? `${Math.round(differenceInDays(parseISO(g.date), parseISO(birthDate)) / 30.4375)}m`
+        : format(parseISO(g.date), 'dd/MM'),
+      bebe:  tab === 'poids' ? (g.weight ? +(g.weight / 1000).toFixed(3) : undefined) : tab === 'taille' ? g.height : g.headCirc,
+    }));
+  })();
+
+  const tabs: Tab[] = ['poids', 'taille', 'crâne'];
+  const bebeColor = { poids: '#f472b6', taille: '#a855f7', crâne: '#60a5fa' };
+  const units = { poids: 'kg', taille: 'cm', crâne: 'cm' };
   const latest = sorted[sorted.length - 1];
 
   return (
@@ -63,16 +98,13 @@ export function HealthTracking({ data, onRefresh }: Props) {
         title="Croissance"
         subtitle="Poids, taille et périmètre crânien"
         action={
-          <button
-            onClick={() => setShowAdd(true)}
-            className="bg-gradient-to-r from-pink-400 to-purple-400 text-white p-2.5 rounded-xl"
-          >
+          <button onClick={() => setShowAdd(true)} className="bg-gradient-to-r from-pink-400 to-purple-400 text-white p-2.5 rounded-xl">
             <Plus size={20} />
           </button>
         }
       />
 
-      {/* Last values */}
+      {/* Dernières valeurs */}
       {latest && (
         <div className="px-4 mb-4">
           <div className="grid grid-cols-3 gap-2">
@@ -101,48 +133,79 @@ export function HealthTracking({ data, onRefresh }: Props) {
         </div>
       )}
 
-      {/* Chart */}
-      {chartData.length > 1 && (
+      {/* Graphique */}
+      {(chartData.length > 1 || (showWHO && whoData)) && (
         <div className="px-4 mb-4">
           <Card className="p-4">
-            {/* Tab selector */}
-            <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-xl">
+            {/* Onglets */}
+            <div className="flex gap-1 mb-3 bg-gray-100 p-1 rounded-xl">
               {tabs.map(t => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all capitalize ${
-                    tab === t ? 'bg-white text-pink-500 shadow-sm' : 'text-gray-500'
-                  }`}
-                >
+                <button key={t} onClick={() => setTab(t)}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all capitalize ${tab === t ? 'bg-white text-pink-500 shadow-sm' : 'text-gray-500'}`}>
                   {t}
                 </button>
               ))}
             </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+
+            {/* Bouton OMS — seulement pour poids et taille */}
+            {tab !== 'crâne' && birthDate && (
+              <button
+                onClick={() => setShowWHO(v => !v)}
+                className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold mb-3 transition-all ${
+                  showWHO
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                    : 'bg-gray-50 text-gray-500 border border-gray-100'
+                }`}
+              >
+                <Activity size={13} />
+                {showWHO ? '✓ Courbes OMS affichées' : 'Voir les normes OMS (filles)'}
+              </button>
+            )}
+
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#9ca3af' }} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9ca3af' }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} />
                 <Tooltip
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}
-                  formatter={(v) => [`${v} ${units[tab]}`, tab]}
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }}
+                  formatter={(v, name) => {
+                    const labels: Record<string, string> = { bebe: '👶 Bébé', p3: 'P3 (petite)', p50: 'P50 (médiane)', p97: 'P97 (grande)' };
+                    return [`${v} ${units[tab]}`, labels[String(name)] ?? String(name)];
+                  }}
                 />
+                {showWHO && whoData && (
+                  <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} formatter={(v) => {
+                    const m: Record<string, string> = { bebe: '👶 Bébé', p3: 'P3', p50: 'P50 médiane', p97: 'P97' };
+                    return m[v] ?? v;
+                  }} />
+                )}
+                {showWHO && whoData && <>
+                  <Line type="monotone" dataKey="p97" stroke="#d1d5db" strokeWidth={1} strokeDasharray="4 3" dot={false} connectNulls />
+                  <Line type="monotone" dataKey="p50" stroke="#9ca3af" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls />
+                  <Line type="monotone" dataKey="p3"  stroke="#d1d5db" strokeWidth={1} strokeDasharray="4 3" dot={false} connectNulls />
+                </>}
                 <Line
                   type="monotone"
-                  dataKey={tab}
-                  stroke={colors[tab]}
+                  dataKey="bebe"
+                  stroke={bebeColor[tab]}
                   strokeWidth={2.5}
-                  dot={{ fill: colors[tab], strokeWidth: 0, r: 4 }}
+                  dot={{ fill: bebeColor[tab], strokeWidth: 0, r: 4 }}
                   connectNulls
                 />
               </LineChart>
             </ResponsiveContainer>
+
+            {showWHO && (
+              <p className="text-xs text-center text-gray-400 mt-1">
+                Normes OMS filles 0–24 mois · P3 / P50 / P97
+              </p>
+            )}
           </Card>
         </div>
       )}
 
-      {/* History */}
+      {/* Historique */}
       <div className="px-4 space-y-2">
         <p className="text-sm font-semibold text-gray-600 mb-2">Historique</p>
         {sorted.length === 0 && (
@@ -162,16 +225,14 @@ export function HealthTracking({ data, onRefresh }: Props) {
                   {format(parseISO(entry.date), 'EEEE d MMMM yyyy', { locale: fr })}
                 </p>
                 <div className="flex gap-3 mt-1 flex-wrap">
-                  {entry.weight && <span className="text-xs bg-pink-50 text-pink-500 px-2 py-0.5 rounded-full font-medium">{(entry.weight / 1000).toFixed(2)} kg</span>}
-                  {entry.height && <span className="text-xs bg-purple-50 text-purple-500 px-2 py-0.5 rounded-full font-medium">{entry.height} cm</span>}
+                  {entry.weight   && <span className="text-xs bg-pink-50 text-pink-500 px-2 py-0.5 rounded-full font-medium">{(entry.weight / 1000).toFixed(2)} kg</span>}
+                  {entry.height   && <span className="text-xs bg-purple-50 text-purple-500 px-2 py-0.5 rounded-full font-medium">{entry.height} cm</span>}
                   {entry.headCirc && <span className="text-xs bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full font-medium">PC {entry.headCirc} cm</span>}
                 </div>
                 {entry.notes && <p className="text-xs text-gray-400 mt-1">{entry.notes}</p>}
               </div>
-              <button
-                onClick={() => { deleteGrowth(entry.id); onRefresh(); }}
-                className="p-1.5 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors ml-2"
-              >
+              <button onClick={() => { deleteGrowth(entry.id); onRefresh(); }}
+                className="p-1.5 rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors ml-2">
                 <Trash2 size={16} />
               </button>
             </div>
@@ -185,11 +246,8 @@ export function HealthTracking({ data, onRefresh }: Props) {
         <FormField label="Taille (cm)" type="number" value={form.height} onChange={v => setForm(f => ({ ...f, height: v }))} placeholder="50" step="0.1" min="0" />
         <FormField label="Périmètre crânien (cm)" type="number" value={form.headCirc} onChange={v => setForm(f => ({ ...f, headCirc: v }))} placeholder="34" step="0.1" min="0" />
         <TextareaField label="Notes" value={form.notes} onChange={v => setForm(f => ({ ...f, notes: v }))} placeholder="Ex : visite pédiatre, bonne forme..." rows={2} />
-        <button
-          onClick={handleAdd}
-          disabled={!form.date}
-          className="w-full bg-gradient-to-r from-pink-400 to-purple-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50"
-        >
+        <button onClick={handleAdd} disabled={!form.date}
+          className="w-full bg-gradient-to-r from-pink-400 to-purple-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50">
           Enregistrer
         </button>
       </Modal>
