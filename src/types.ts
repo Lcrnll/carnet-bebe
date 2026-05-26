@@ -4,6 +4,7 @@ export interface BabyProfile {
   birthWeight: number; // grams
   birthHeight: number; // cm
   birthHeadCirc: number; // cm
+  updatedAt?: string;
 }
 
 export interface GrowthEntry {
@@ -13,6 +14,7 @@ export interface GrowthEntry {
   height?: number; // cm
   headCirc?: number; // cm
   notes: string;
+  updatedAt?: string;
 }
 
 export interface Appointment {
@@ -25,18 +27,20 @@ export interface Appointment {
   notes: string;
   status: 'upcoming' | 'done' | 'missed';
   reminderSet: boolean;
+  updatedAt?: string;
 }
 
 export interface Vaccine {
   id: string;
   name: string;
-  scheduledAge: string; // e.g. "2 mois"
-  scheduledAgeMonths: number; // for sorting/alerts
+  scheduledAge: string;
+  scheduledAgeMonths: number;
   diseases: string[];
   done: boolean;
   doneDate?: string;
   batchNumber?: string;
   notes?: string;
+  updatedAt?: string;
 }
 
 export interface ChecklistItem {
@@ -47,6 +51,7 @@ export interface ChecklistItem {
   doneDate?: string;
   category: 'medecin' | 'examen' | 'administratif' | 'personnalise';
   scheduledAge?: string;
+  updatedAt?: string;
 }
 
 export interface NoteEntry {
@@ -59,6 +64,7 @@ export interface NoteEntry {
   sleep?: string;
   feeding?: string;
   mood?: string;
+  updatedAt?: string;
 }
 
 export interface Document {
@@ -67,6 +73,7 @@ export interface Document {
   label: string;
   value: string;
   notes?: string;
+  updatedAt?: string;
 }
 
 export interface AppData {
@@ -77,4 +84,5 @@ export interface AppData {
   checklist: ChecklistItem[];
   notes: NoteEntry[];
   documents: Document[];
+  deletedIds?: string[]; // IDs supprimés, pour ne pas les faire réapparaître
 }

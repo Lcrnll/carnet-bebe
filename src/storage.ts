@@ -5,6 +5,8 @@ import { pushToCloud, isCloudConfigured } from './cloud';
 
 const KEY = 'carnet-bebe-data';
 
+const now = () => new Date().toISOString();
+
 function load(): AppData {
   try {
     const raw = localStorage.getItem(KEY);
@@ -18,82 +20,122 @@ function load(): AppData {
         checklist:    parsed.checklist?.length ? parsed.checklist : defaultChecklist(),
         notes:        parsed.notes        ?? [],
         documents:    parsed.documents    ?? [],
+        deletedIds:   parsed.deletedIds   ?? [],
       };
     }
   } catch {}
   return {
     profile: null, growth: [], appointments: [],
     vaccines: defaultVaccines(), checklist: defaultChecklist(),
-    notes: [], documents: [],
+    notes: [], documents: [], deletedIds: [],
   };
 }
 
 function save(data: AppData) {
   localStorage.setItem(KEY, JSON.stringify(data));
-  // Sync automatique vers Firebase si configuré
   if (isCloudConfigured()) {
     pushToCloud(data).catch(console.error);
   }
 }
 
+function addDeleted(id: string) {
+  const d = load();
+  d.deletedIds = [...new Set([...(d.deletedIds ?? []), id])];
+  return d;
+}
+
 export function getData(): AppData { return load(); }
 
 export function saveProfile(profile: BabyProfile) {
-  const d = load(); d.profile = profile; save(d);
+  const d = load();
+  d.profile = { ...profile, updatedAt: now() };
+  save(d);
 }
 
 export function addGrowth(entry: GrowthEntry) {
-  const d = load(); d.growth = [entry, ...d.growth]; save(d);
+  const d = load();
+  d.growth = [{ ...entry, updatedAt: now() }, ...d.growth];
+  save(d);
 }
 export function updateGrowth(entry: GrowthEntry) {
-  const d = load(); d.growth = d.growth.map(g => g.id === entry.id ? entry : g); save(d);
+  const d = load();
+  d.growth = d.growth.map(g => g.id === entry.id ? { ...entry, updatedAt: now() } : g);
+  save(d);
 }
 export function deleteGrowth(id: string) {
-  const d = load(); d.growth = d.growth.filter(g => g.id !== id); save(d);
+  const d = addDeleted(id);
+  d.growth = d.growth.filter(g => g.id !== id);
+  save(d);
 }
 
 export function addAppointment(a: Appointment) {
-  const d = load(); d.appointments = [a, ...d.appointments]; save(d);
+  const d = load();
+  d.appointments = [{ ...a, updatedAt: now() }, ...d.appointments];
+  save(d);
 }
 export function updateAppointment(a: Appointment) {
-  const d = load(); d.appointments = d.appointments.map(x => x.id === a.id ? a : x); save(d);
+  const d = load();
+  d.appointments = d.appointments.map(x => x.id === a.id ? { ...a, updatedAt: now() } : x);
+  save(d);
 }
 export function deleteAppointment(id: string) {
-  const d = load(); d.appointments = d.appointments.filter(x => x.id !== id); save(d);
+  const d = addDeleted(id);
+  d.appointments = d.appointments.filter(x => x.id !== id);
+  save(d);
 }
 
 export function updateVaccine(v: Vaccine) {
-  const d = load(); d.vaccines = d.vaccines.map(x => x.id === v.id ? v : x); save(d);
+  const d = load();
+  d.vaccines = d.vaccines.map(x => x.id === v.id ? { ...v, updatedAt: now() } : x);
+  save(d);
 }
 
 export function updateChecklistItem(item: ChecklistItem) {
-  const d = load(); d.checklist = d.checklist.map(x => x.id === item.id ? item : x); save(d);
+  const d = load();
+  d.checklist = d.checklist.map(x => x.id === item.id ? { ...item, updatedAt: now() } : x);
+  save(d);
 }
 export function addChecklistItem(item: ChecklistItem) {
-  const d = load(); d.checklist = [...d.checklist, item]; save(d);
+  const d = load();
+  d.checklist = [...d.checklist, { ...item, updatedAt: now() }];
+  save(d);
 }
 export function deleteChecklistItem(id: string) {
-  const d = load(); d.checklist = d.checklist.filter(x => x.id !== id); save(d);
+  const d = addDeleted(id);
+  d.checklist = d.checklist.filter(x => x.id !== id);
+  save(d);
 }
 
 export function addNote(n: NoteEntry) {
-  const d = load(); d.notes = [n, ...d.notes]; save(d);
+  const d = load();
+  d.notes = [{ ...n, updatedAt: now() }, ...d.notes];
+  save(d);
 }
 export function updateNote(n: NoteEntry) {
-  const d = load(); d.notes = d.notes.map(x => x.id === n.id ? n : x); save(d);
+  const d = load();
+  d.notes = d.notes.map(x => x.id === n.id ? { ...n, updatedAt: now() } : x);
+  save(d);
 }
 export function deleteNote(id: string) {
-  const d = load(); d.notes = d.notes.filter(x => x.id !== id); save(d);
+  const d = addDeleted(id);
+  d.notes = d.notes.filter(x => x.id !== id);
+  save(d);
 }
 
 export function addDocument(doc: Document) {
-  const d = load(); d.documents = [...d.documents, doc]; save(d);
+  const d = load();
+  d.documents = [...d.documents, { ...doc, updatedAt: now() }];
+  save(d);
 }
 export function updateDocument(doc: Document) {
-  const d = load(); d.documents = d.documents.map(x => x.id === doc.id ? doc : x); save(d);
+  const d = load();
+  d.documents = d.documents.map(x => x.id === doc.id ? { ...doc, updatedAt: now() } : x);
+  save(d);
 }
 export function deleteDocument(id: string) {
-  const d = load(); d.documents = d.documents.filter(x => x.id !== id); save(d);
+  const d = addDeleted(id);
+  d.documents = d.documents.filter(x => x.id !== id);
+  save(d);
 }
 
 export function uid(): string {
