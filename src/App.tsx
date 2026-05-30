@@ -14,7 +14,7 @@ export default function App() {
   const { data, refresh } = useData();
 
   return (
-    <div className="min-h-svh bg-pink-50 max-w-lg mx-auto relative">
+    <div className="min-h-svh bg-pink-50 w-full relative">
       <main>
         <Routes>
           <Route path="/" element={<Dashboard data={data} onRefresh={refresh} />} />

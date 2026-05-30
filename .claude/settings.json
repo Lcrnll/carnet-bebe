@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/mathildeleonard/carnet-bebe && git pull 2>&1 | tail -1",
+            "statusMessage": "Mise à jour depuis GitHub..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/mathildeleonard/carnet-bebe && if ! git diff --quiet || ! git diff --staged --quiet; then git add -A && git commit -m \"auto: modifications via Claude Code\" && git push && echo '{\"systemMessage\": \"Modifications sauvegardées et envoyées sur GitHub.\"}'; fi 2>/dev/null || true",
+            "statusMessage": "Envoi des modifications sur GitHub..."
+          }
+        ]
+      }
+    ]
+  }
+}

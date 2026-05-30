@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { differenceInWeeks, differenceInMonths, format, parseISO, addMonths, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Scale, Ruler, Calendar, Shield, Edit2, Check } from 'lucide-react';
+import { Scale, Ruler, Calendar, Shield, Edit2, Check, Droplet } from 'lucide-react';
 import type { AppData, BabyProfile } from '../types';
 import { saveProfile } from '../storage';
 import { Card } from '../components/Card';
@@ -113,11 +113,11 @@ export function Dashboard({ data, onRefresh }: Props) {
       </div>
 
       <div className="px-4 -mt-4 space-y-3">
-        {/* Quick stats — poids + taille */}
+        {/* Quick stats — poids + taille + groupe sanguin */}
         {profile && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Card className="p-3 text-center">
-              <Scale size={20} className="text-pink-400 mx-auto mb-1" />
+              <Scale size={18} className="text-pink-400 mx-auto mb-1" />
               <p className="text-xs text-gray-500">Dernier poids</p>
               <p className="text-sm font-bold text-gray-800">
                 {lastWeight?.weight
@@ -129,7 +129,7 @@ export function Dashboard({ data, onRefresh }: Props) {
               </p>
             </Card>
             <Card className="p-3 text-center">
-              <Ruler size={20} className="text-purple-400 mx-auto mb-1" />
+              <Ruler size={18} className="text-purple-400 mx-auto mb-1" />
               <p className="text-xs text-gray-500">Dernière taille</p>
               <p className="text-sm font-bold text-gray-800">
                 {lastHeight?.height ? `${lastHeight.height} cm` : `${profile.birthHeight} cm`}
@@ -138,11 +138,19 @@ export function Dashboard({ data, onRefresh }: Props) {
                 {lastHeight ? format(parseISO(lastHeight.date), 'd MMM', { locale: fr }) : 'naissance'}
               </p>
             </Card>
+            <Card className="p-3 text-center">
+              <Droplet size={18} className="text-red-400 mx-auto mb-1" />
+              <p className="text-xs text-gray-500">Groupe sanguin</p>
+              <p className="text-sm font-bold text-gray-800">
+                {profile.bloodType || '—'}
+              </p>
+              <p className="text-xs text-gray-400">profil</p>
+            </Card>
           </div>
         )}
 
-        {/* Next appointment */}
-        {nextAppt && (
+        {/* Next appointment — toujours visible */}
+        {profile && (
           <Card className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
@@ -150,11 +158,17 @@ export function Dashboard({ data, onRefresh }: Props) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-gray-500 font-medium">Prochain rendez-vous</p>
-                <p className="text-sm font-semibold text-gray-800 truncate">{nextAppt.title}</p>
-                <p className="text-xs text-gray-500">
-                  {format(parseISO(nextAppt.date), 'd MMM yyyy', { locale: fr })}
-                  {nextAppt.time && ` à ${nextAppt.time}`}
-                </p>
+                {nextAppt ? (
+                  <>
+                    <p className="text-sm font-semibold text-gray-800 truncate">{nextAppt.title}</p>
+                    <p className="text-xs text-gray-500">
+                      {format(parseISO(nextAppt.date), 'd MMM yyyy', { locale: fr })}
+                      {nextAppt.time && ` à ${nextAppt.time}`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400">Aucun RDV prévu</p>
+                )}
               </div>
             </div>
           </Card>
