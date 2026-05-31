@@ -94,6 +94,9 @@ export async function pullFromCloud(): Promise<AppData | null> {
       checklist:    raw.checklist?.length ? raw.checklist : defaultChecklist(),
       notes:        raw.notes        ?? [],
       documents:    raw.documents    ?? [],
+      sleep:        raw.sleep        ?? [],
+      feeding:      raw.feeding      ?? [],
+      milestones:   raw.milestones   ?? [],
     };
   } catch (e) {
     console.error('[cloud] pull error', e);
@@ -131,6 +134,9 @@ export function subscribeToCloud(callback: (data: AppData) => void): Unsubscribe
         checklist:    raw.checklist?.length ? raw.checklist : defaultChecklist(),
         notes:        raw.notes        ?? [],
         documents:    raw.documents    ?? [],
+        sleep:        raw.sleep        ?? [],
+        feeding:      raw.feeding      ?? [],
+        milestones:   raw.milestones   ?? [],
       });
     },
     (err) => console.error('[cloud] subscribe error', err)

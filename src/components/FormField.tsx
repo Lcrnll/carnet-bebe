@@ -7,9 +7,10 @@ interface InputProps {
   required?: boolean;
   step?: string;
   min?: string;
+  max?: string;
 }
 
-export function FormField({ label, type = 'text', value, onChange, placeholder, required, step, min }: InputProps) {
+export function FormField({ label, type = 'text', value, onChange, placeholder, required, step, min, max }: InputProps) {
   return (
     <div className="mb-4">
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
@@ -21,6 +22,7 @@ export function FormField({ label, type = 'text', value, onChange, placeholder, 
         required={required}
         step={step}
         min={min}
+        max={max}
         className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-pink-300 focus:border-transparent transition-all"
       />
     </div>

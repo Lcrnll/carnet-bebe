@@ -1,9 +1,13 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { differenceInWeeks, differenceInMonths, format, parseISO, addMonths, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Scale, Ruler, Calendar, Shield, Edit2, Check, Droplet } from 'lucide-react';
-import type { AppData, BabyProfile } from '../types';
-import { saveProfile } from '../storage';
+import {
+  Scale, Ruler, Calendar, Shield, Edit2, Check, Droplet,
+  Pill, Phone, TrendingUp, Utensils, AlertCircle,
+} from 'lucide-react';
+import type { AppData, BabyProfile, GrowthEntry } from '../types';
+import { saveProfile, addGrowth, uid } from '../storage';
 import { Card } from '../components/Card';
 import { Modal } from '../components/Modal';
 import { FormField, SelectField } from '../components/FormField';
@@ -11,6 +15,14 @@ import { FormField, SelectField } from '../components/FormField';
 interface Props { data: AppData; onRefresh: () => void; }
 
 const BLOOD_TYPES = ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+// Numéros d'urgence par défaut
+const DEFAULT_EMERGENCY = [
+  { label: 'SAMU', value: '15', notes: 'Urgences médicales' },
+  { label: 'Pompiers', value: '18', notes: 'Secours' },
+  { label: '🇪🇺 Urgences EU', value: '112', notes: 'Europe' },
+  { label: 'Antipoison', value: '09 74 75 00 00', notes: 'Intoxications' },
+];
 
 function getAge(birthDate: string) {
   const bd = parseISO(birthDate);
@@ -49,8 +61,24 @@ function getLastMeasure(data: AppData, field: 'weight' | 'height') {
   return entries[0] || null;
 }
 
+// Calcul dose Doliprane (paracétamol)
+function calcDoliprane(weightG: number) {
+  const kg = weightG / 1000;
+  const dose = Math.round(kg * 15); // 15 mg/kg par prise
+  const doseMax = Math.min(Math.round(kg * 60), 4000); // 60 mg/kg/jour
+  const ml = +(dose / 24).toFixed(1); // Doliprane 2,4% (24 mg/ml)
+  const sachet80 = Math.round(dose / 80 * 10) / 10;
+  const sachet100 = Math.round(dose / 100 * 10) / 10;
+  return { dose, doseMax, ml, sachet80, sachet100 };
+}
+
 export function Dashboard({ data, onRefresh }: Props) {
+  const navigate = useNavigate();
   const [showEdit, setShowEdit] = useState(!data.profile);
+  const [showDoliprane, setShowDoliprane] = useState(false);
+  const [showAddWeight, setShowAddWeight] = useState(false);
+  const [weightForm, setWeightForm] = useState({ weight: '', height: '', date: format(new Date(), 'yyyy-MM-dd') });
+
   const [form, setForm] = useState<BabyProfile>(data.profile || {
     name: '', birthDate: '', birthWeight: 0, birthHeight: 0, birthHeadCirc: 0, bloodType: '',
   });
@@ -67,11 +95,35 @@ export function Dashboard({ data, onRefresh }: Props) {
     setShowEdit(true);
   };
 
+  const handleAddWeight = () => {
+    if (!weightForm.weight && !weightForm.height) return;
+    const entry: GrowthEntry = {
+      id: uid(),
+      date: weightForm.date,
+      weight: weightForm.weight ? Math.round(Number(weightForm.weight) * 1000) : undefined,
+      height: weightForm.height ? Number(weightForm.height) : undefined,
+      notes: '',
+    };
+    addGrowth(entry);
+    onRefresh();
+    setWeightForm({ weight: '', height: '', date: format(new Date(), 'yyyy-MM-dd') });
+    setShowAddWeight(false);
+  };
+
   const profile = data.profile;
   const lastWeight = getLastMeasure(data, 'weight');
   const lastHeight = getLastMeasure(data, 'height');
   const nextVaccine = profile ? getNextVaccine(data) : null;
   const nextAppt = profile ? getNextAppointment(data) : null;
+
+  // Contacts d'urgence : priorité aux données documents, sinon défauts
+  const urgencyContacts = data.documents.filter(d => d.category === 'urgence').length > 0
+    ? data.documents.filter(d => d.category === 'urgence').slice(0, 4)
+    : DEFAULT_EMERGENCY;
+
+  // Poids courant pour Doliprane
+  const currentWeightG = lastWeight?.weight ?? profile?.birthWeight ?? 0;
+  const doli = currentWeightG > 0 ? calcDoliprane(currentWeightG) : null;
 
   return (
     <div className="pb-24 fade-in">
@@ -149,6 +201,30 @@ export function Dashboard({ data, onRefresh }: Props) {
           </div>
         )}
 
+        {/* Raccourcis rapides */}
+        {profile && (
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => setShowAddWeight(true)}
+              className="bg-gradient-to-br from-pink-400 to-pink-500 text-white rounded-2xl py-3 px-2 flex flex-col items-center gap-1 active:scale-95 transition-transform">
+              <Scale size={20} />
+              <span className="text-xs font-semibold">+ Poids</span>
+            </button>
+            <button
+              onClick={() => navigate('/journal?tab=notes', { state: { openAdd: true, type: 'symptom' } })}
+              className="bg-gradient-to-br from-orange-400 to-red-400 text-white rounded-2xl py-3 px-2 flex flex-col items-center gap-1 active:scale-95 transition-transform">
+              <TrendingUp size={20} />
+              <span className="text-xs font-semibold">+ Symptôme</span>
+            </button>
+            <button
+              onClick={() => navigate('/journal?tab=alimentation')}
+              className="bg-gradient-to-br from-blue-400 to-cyan-400 text-white rounded-2xl py-3 px-2 flex flex-col items-center gap-1 active:scale-95 transition-transform">
+              <Utensils size={20} />
+              <span className="text-xs font-semibold">+ Biberon</span>
+            </button>
+          </div>
+        )}
+
         {/* Next appointment — toujours visible */}
         {profile && (
           <Card className="p-4">
@@ -188,6 +264,52 @@ export function Dashboard({ data, onRefresh }: Props) {
                   À {nextVaccine.age} — {format(nextVaccine.dueDate, 'd MMM yyyy', { locale: fr })}
                 </p>
               </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Calculateur Doliprane */}
+        {profile && currentWeightG > 0 && (
+          <Card className="p-4" onClick={() => setShowDoliprane(true)}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
+                <Pill size={20} className="text-amber-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 font-medium">Calculateur Doliprane</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  {doli ? `${doli.dose} mg par prise` : 'Appuyez pour calculer'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {doli ? `≈ ${doli.ml} ml (sirop 2,4%)` : ''}
+                </p>
+              </div>
+              <div className="text-gray-300 text-xs">›</div>
+            </div>
+          </Card>
+        )}
+
+        {/* Contacts d'urgence */}
+        {profile && (
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle size={16} className="text-red-400" />
+              <p className="text-sm font-semibold text-gray-700">Contacts d'urgence</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {urgencyContacts.map((contact, i) => (
+                <a
+                  key={i}
+                  href={`tel:${contact.value.replace(/\s/g, '')}`}
+                  className="flex items-center gap-2 bg-red-50 rounded-xl px-3 py-2 active:scale-95 transition-transform no-underline"
+                >
+                  <Phone size={14} className="text-red-400 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-red-500 truncate">{contact.label}</p>
+                    <p className="text-xs text-red-400 font-mono">{contact.value}</p>
+                  </div>
+                </a>
+              ))}
             </div>
           </Card>
         )}
@@ -236,6 +358,64 @@ export function Dashboard({ data, onRefresh }: Props) {
           </Card>
         )}
       </div>
+
+      {/* Modal Doliprane */}
+      <Modal open={showDoliprane} title="💊 Calculateur Doliprane" onClose={() => setShowDoliprane(false)}>
+        {doli && (
+          <div className="space-y-4">
+            <div className="bg-amber-50 rounded-2xl p-4 text-center">
+              <p className="text-xs text-amber-600 font-medium mb-1">Poids actuel</p>
+              <p className="text-2xl font-bold text-amber-700">{(currentWeightG / 1000).toFixed(2)} kg</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-amber-400 to-orange-400 rounded-2xl p-5 text-white text-center">
+              <p className="text-sm font-medium text-amber-100 mb-1">Dose par prise (15 mg/kg)</p>
+              <p className="text-4xl font-bold">{doli.dose} mg</p>
+              <p className="text-amber-100 text-sm mt-1">max {doli.doseMax} mg/jour (4 prises)</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Card className="p-4 text-center">
+                <p className="text-xs text-gray-500 mb-1">💧 Sirop 2,4%</p>
+                <p className="text-xl font-bold text-gray-800">{doli.ml} ml</p>
+                <p className="text-xs text-gray-400">Doliprane nourrissons</p>
+              </Card>
+              <Card className="p-4 text-center">
+                <p className="text-xs text-gray-500 mb-1">📦 Sachet 80 mg</p>
+                <p className="text-xl font-bold text-gray-800">
+                  {doli.sachet80 >= 1 ? Math.round(doli.sachet80) : `½`}
+                </p>
+                <p className="text-xs text-gray-400">sachet{doli.sachet80 >= 2 ? 's' : ''}</p>
+              </Card>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+              <p className="text-xs font-semibold text-gray-600 mb-2">ℹ️ Rappels importants</p>
+              <p className="text-xs text-gray-500">• Minimum 6h entre chaque prise</p>
+              <p className="text-xs text-gray-500">• Maximum 4 prises par 24h</p>
+              <p className="text-xs text-gray-500">• Si fièvre &gt; 38°C chez un nourrisson &lt; 3 mois : consultez un médecin</p>
+              <p className="text-xs text-gray-500">• Ne pas combiner avec d'autres produits à base de paracétamol</p>
+            </div>
+
+            <p className="text-xs text-gray-400 text-center">
+              Ces valeurs sont indicatives. Consultez toujours un médecin ou pharmacien.
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal ajout rapide poids */}
+      <Modal open={showAddWeight} title="⚖️ Ajouter un poids" onClose={() => setShowAddWeight(false)}>
+        <FormField label="Date" type="date" value={weightForm.date} onChange={v => setWeightForm(f => ({ ...f, date: v }))} />
+        <FormField label="Poids (kg)" type="number" value={weightForm.weight} onChange={v => setWeightForm(f => ({ ...f, weight: v }))} placeholder="5.23" step="0.01" min="0" max="30" />
+        <FormField label="Taille (cm)" type="number" value={weightForm.height} onChange={v => setWeightForm(f => ({ ...f, height: v }))} placeholder="56" step="0.1" min="0" max="120" />
+        <button
+          onClick={handleAddWeight}
+          disabled={!weightForm.weight && !weightForm.height}
+          className="w-full bg-gradient-to-r from-pink-400 to-purple-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 mt-2">
+          Enregistrer
+        </button>
+      </Modal>
 
       {/* Edit profile modal */}
       <Modal open={showEdit} title="Profil de bébé" onClose={() => setShowEdit(false)}>

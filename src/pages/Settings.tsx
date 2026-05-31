@@ -123,6 +123,9 @@ export function Settings({ data, onRefresh }: Props) {
           checklist:    parsed.checklist?.length ? parsed.checklist : defaultChecklist(),
           notes:        parsed.notes        ?? [],
           documents:    parsed.documents    ?? [],
+          sleep:        parsed.sleep        ?? [],
+          feeding:      parsed.feeding      ?? [],
+          milestones:   parsed.milestones   ?? [],
         };
         localStorage.setItem(LOCAL_KEY, JSON.stringify(merged));
         onRefresh();

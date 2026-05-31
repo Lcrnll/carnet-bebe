@@ -1,14 +1,13 @@
 import { useLocation, Link } from 'react-router-dom';
-import { Home, TrendingUp, Calendar, Shield, CheckSquare, FileText, Settings } from 'lucide-react';
+import { Home, TrendingUp, Calendar, Shield, BookOpen, Settings } from 'lucide-react';
 
 const navItems = [
-  { to: '/', icon: Home, label: 'Accueil' },
-  { to: '/sante', icon: TrendingUp, label: 'Santé' },
-  { to: '/rdv', icon: Calendar, label: 'RDV' },
-  { to: '/vaccins', icon: Shield, label: 'Vaccins' },
-  { to: '/checklist', icon: CheckSquare, label: 'Suivi' },
-  { to: '/notes', icon: FileText, label: 'Notes' },
-  { to: '/reglages', icon: Settings, label: 'Réglages' },
+  { to: '/',        icon: Home,       label: 'Accueil' },
+  { to: '/sante',   icon: TrendingUp, label: 'Santé' },
+  { to: '/rdv',     icon: Calendar,   label: 'RDV' },
+  { to: '/vaccins', icon: Shield,      label: 'Vaccins' },
+  { to: '/journal', icon: BookOpen,    label: 'Journal' },
+  { to: '/reglages',icon: Settings,    label: 'Réglages' },
 ];
 
 export function BottomNav() {

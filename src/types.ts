@@ -77,6 +77,39 @@ export interface Document {
   updatedAt?: string;
 }
 
+export interface SleepEntry {
+  id: string;
+  date: string;       // YYYY-MM-DD
+  startTime: string;  // HH:mm
+  endTime?: string;   // HH:mm
+  duration?: number;  // minutes
+  type: 'nuit' | 'sieste';
+  quality?: 'bonne' | 'moyenne' | 'mauvaise';
+  notes?: string;
+  updatedAt?: string;
+}
+
+export interface FeedingEntry {
+  id: string;
+  date: string;  // YYYY-MM-DD
+  time: string;  // HH:mm
+  type: 'sein_gauche' | 'sein_droit' | 'sein_deux' | 'biberon' | 'mixte' | 'solide';
+  duration?: number;  // minutes (allaitement)
+  quantity?: number;  // ml (biberon)
+  food?: string;      // diversification
+  notes?: string;
+  updatedAt?: string;
+}
+
+export interface MilestoneEntry {
+  id: string;
+  date: string;  // YYYY-MM-DD
+  emoji: string;
+  title: string;
+  notes?: string;
+  updatedAt?: string;
+}
+
 export interface AppData {
   profile: BabyProfile | null;
   growth: GrowthEntry[];
@@ -85,5 +118,8 @@ export interface AppData {
   checklist: ChecklistItem[];
   notes: NoteEntry[];
   documents: Document[];
-  deletedIds?: string[]; // IDs supprimés, pour ne pas les faire réapparaître
+  sleep: SleepEntry[];
+  feeding: FeedingEntry[];
+  milestones: MilestoneEntry[];
+  deletedIds?: string[];
 }

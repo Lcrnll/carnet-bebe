@@ -1,4 +1,4 @@
-import type { AppData, BabyProfile, GrowthEntry, Appointment, Vaccine, ChecklistItem, NoteEntry, Document } from './types';
+import type { AppData, BabyProfile, GrowthEntry, Appointment, Vaccine, ChecklistItem, NoteEntry, Document, SleepEntry, FeedingEntry, MilestoneEntry } from './types';
 import { defaultVaccines } from './data/vaccines';
 import { defaultChecklist } from './data/checklist';
 import { pushToCloud, isCloudConfigured } from './cloud';
@@ -20,6 +20,9 @@ function load(): AppData {
         checklist:    parsed.checklist?.length ? parsed.checklist : defaultChecklist(),
         notes:        parsed.notes        ?? [],
         documents:    parsed.documents    ?? [],
+        sleep:        parsed.sleep        ?? [],
+        feeding:      parsed.feeding      ?? [],
+        milestones:   parsed.milestones   ?? [],
         deletedIds:   parsed.deletedIds   ?? [],
       };
     }
@@ -27,7 +30,8 @@ function load(): AppData {
   return {
     profile: null, growth: [], appointments: [],
     vaccines: defaultVaccines(), checklist: defaultChecklist(),
-    notes: [], documents: [], deletedIds: [],
+    notes: [], documents: [], sleep: [], feeding: [], milestones: [],
+    deletedIds: [],
   };
 }
 
@@ -145,6 +149,57 @@ export function updateDocument(doc: Document) {
 export function deleteDocument(id: string) {
   const d = addDeleted(id);
   d.documents = d.documents.filter(x => x.id !== id);
+  save(d);
+}
+
+// Sleep
+export function addSleep(entry: SleepEntry) {
+  const d = load();
+  d.sleep = [{ ...entry, updatedAt: now() }, ...d.sleep];
+  save(d);
+}
+export function updateSleep(entry: SleepEntry) {
+  const d = load();
+  d.sleep = d.sleep.map(x => x.id === entry.id ? { ...entry, updatedAt: now() } : x);
+  save(d);
+}
+export function deleteSleep(id: string) {
+  const d = addDeleted(id);
+  d.sleep = d.sleep.filter(x => x.id !== id);
+  save(d);
+}
+
+// Feeding
+export function addFeeding(entry: FeedingEntry) {
+  const d = load();
+  d.feeding = [{ ...entry, updatedAt: now() }, ...d.feeding];
+  save(d);
+}
+export function updateFeeding(entry: FeedingEntry) {
+  const d = load();
+  d.feeding = d.feeding.map(x => x.id === entry.id ? { ...entry, updatedAt: now() } : x);
+  save(d);
+}
+export function deleteFeeding(id: string) {
+  const d = addDeleted(id);
+  d.feeding = d.feeding.filter(x => x.id !== id);
+  save(d);
+}
+
+// Milestones
+export function addMilestone(entry: MilestoneEntry) {
+  const d = load();
+  d.milestones = [{ ...entry, updatedAt: now() }, ...d.milestones];
+  save(d);
+}
+export function updateMilestone(entry: MilestoneEntry) {
+  const d = load();
+  d.milestones = d.milestones.map(x => x.id === entry.id ? { ...entry, updatedAt: now() } : x);
+  save(d);
+}
+export function deleteMilestone(id: string) {
+  const d = addDeleted(id);
+  d.milestones = d.milestones.filter(x => x.id !== id);
   save(d);
 }
 
