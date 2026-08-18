@@ -4,10 +4,10 @@ import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   Plus, Search, Thermometer, FileText, Trash2, X,
-  Moon, Sun, Utensils, Star, Clock, Droplets,
+  Moon, Sun, Utensils, Star, Clock, Droplets, Edit2, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import type { AppData, NoteEntry, SleepEntry, FeedingEntry, MilestoneEntry } from '../types';
-import { addNote, deleteNote, addSleep, deleteSleep, addFeeding, deleteFeeding, addMilestone, deleteMilestone, uid } from '../storage';
+import { addNote, deleteNote, addSleep, deleteSleep, addFeeding, updateFeeding, deleteFeeding, addMilestone, deleteMilestone, uid } from '../storage';
 import { Card } from '../components/Card';
 import { Modal } from '../components/Modal';
 import { FormField, TextareaField } from '../components/FormField';
@@ -431,40 +431,134 @@ function SommeilTab({ data, onRefresh }: Props) {
 // TAB : ALIMENTATION
 // ═══════════════════════════════════════════════════════════════════════════
 
+const emptyFeedingForm = { date: today(), time: now(), type: 'biberon' as FeedingEntry['type'], duration: '', quantity: '', food: '', notes: '' };
+
 function AlimentationTab({ data, onRefresh }: Props) {
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({
-    date: today(),
-    time: now(),
-    type: 'biberon' as FeedingEntry['type'],
-    duration: '',
-    quantity: '',
-    food: '',
-    notes: '',
+  const [editEntry, setEditEntry] = useState<FeedingEntry | null>(null);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [form, setForm] = useState(emptyFeedingForm);
+
+  const openAdd = () => { setForm(emptyFeedingForm); setShowAdd(true); };
+
+  const openEdit = (entry: FeedingEntry) => {
+    setForm({
+      date: entry.date, time: entry.time, type: entry.type,
+      duration: entry.duration ? String(entry.duration) : '',
+      quantity: entry.quantity ? String(entry.quantity) : '',
+      food: entry.food ?? '',
+      notes: entry.notes ?? '',
+    });
+    setEditEntry(entry);
+  };
+
+  const buildEntry = (id: string): FeedingEntry => ({
+    id, date: form.date, time: form.time, type: form.type,
+    duration: form.duration ? Number(form.duration) : undefined,
+    quantity: form.quantity ? Number(form.quantity) : undefined,
+    food: form.food || undefined,
+    notes: form.notes || undefined,
   });
 
   const handleAdd = () => {
-    const entry: FeedingEntry = {
-      id: uid(), date: form.date, time: form.time, type: form.type,
-      duration: form.duration ? Number(form.duration) : undefined,
-      quantity: form.quantity ? Number(form.quantity) : undefined,
-      food: form.food || undefined,
-      notes: form.notes || undefined,
-    };
-    addFeeding(entry);
+    addFeeding(buildEntry(uid()));
     onRefresh();
-    setForm({ date: today(), time: now(), type: 'biberon', duration: '', quantity: '', food: '', notes: '' });
+    setForm(emptyFeedingForm);
     setShowAdd(false);
   };
 
+  const handleEdit = () => {
+    if (!editEntry) return;
+    updateFeeding(buildEntry(editEntry.id));
+    onRefresh();
+    setEditEntry(null);
+  };
+
+  const toggleDate = (d: string) => {
+    setExpandedDates(prev => {
+      const next = new Set(prev);
+      if (next.has(d)) next.delete(d); else next.add(d);
+      return next;
+    });
+  };
+
   const todayStr = today();
-  const todayFeeds = data.feeding.filter(f => f.date === todayStr);
+  const todayFeeds = data.feeding.filter(f => f.date === todayStr).sort((a, b) => b.time.localeCompare(a.time));
   const totalMlToday = todayFeeds.filter(f => f.quantity).reduce((acc, f) => acc + (f.quantity ?? 0), 0);
   const totalMinsToday = todayFeeds.filter(f => f.duration).reduce((acc, f) => acc + (f.duration ?? 0), 0);
 
-  const sorted = [...data.feeding].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
-
   const typeInfo = (t: FeedingEntry['type']) => FEEDING_TYPES.find(x => x.value === t) ?? FEEDING_TYPES[3];
+
+  const pastDates = [...new Set(data.feeding.filter(f => f.date !== todayStr).map(f => f.date))].sort((a, b) => b.localeCompare(a));
+  const dayFeeds = (d: string) => data.feeding.filter(f => f.date === d).sort((a, b) => b.time.localeCompare(a.time));
+  const dayTotalMl = (d: string) => dayFeeds(d).filter(f => f.quantity).reduce((acc, f) => acc + (f.quantity ?? 0), 0);
+
+  const renderEntry = (entry: FeedingEntry) => {
+    const info = typeInfo(entry.type);
+    return (
+      <Card key={entry.id} className="p-4 scale-in">
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-base">{info.emoji}</span>
+              <span className="text-sm font-semibold text-gray-800">{info.label}</span>
+              <span className="text-xs text-gray-400 ml-auto">{entry.time}</span>
+            </div>
+            <div className="flex gap-3 mt-1.5 flex-wrap">
+              {entry.quantity && <span className="text-xs bg-cyan-50 text-cyan-600 px-2 py-0.5 rounded-full font-medium">💧 {entry.quantity} ml</span>}
+              {entry.duration && <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full font-medium">⏱ {fmtDuration(entry.duration)}</span>}
+              {entry.food && <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium">🥄 {entry.food}</span>}
+            </div>
+            {entry.notes && <p className="text-xs text-gray-400 mt-1">{entry.notes}</p>}
+          </div>
+          <div className="flex gap-1 ml-2 flex-shrink-0">
+            <button onClick={() => openEdit(entry)} className="p-1.5 rounded-lg bg-gray-50 text-gray-400 hover:text-blue-400 transition-colors">
+              <Edit2 size={14} />
+            </button>
+            <button onClick={() => { deleteFeeding(entry.id); onRefresh(); }} className="p-1.5 rounded-lg bg-gray-50 text-gray-300 hover:text-red-400 transition-colors">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
+  const feedingModalBody = (onSave: () => void) => (
+    <>
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+        <div className="grid grid-cols-3 gap-2">
+          {FEEDING_TYPES.map(t => (
+            <button key={t.value} onClick={() => setForm(f => ({ ...f, type: t.value }))}
+              className={`py-2.5 px-2 rounded-xl text-xs font-medium border transition-all text-center ${
+                form.type === t.value ? 'bg-blue-50 text-blue-500 border-blue-200' : 'bg-white text-gray-400 border-gray-100'}`}>
+              <div className="text-base mb-0.5">{t.emoji}</div>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="Date" type="date" value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
+        <FormField label="Heure" type="time" value={form.time} onChange={v => setForm(f => ({ ...f, time: v }))} />
+      </div>
+      {['sein_gauche', 'sein_droit', 'sein_deux', 'mixte'].includes(form.type) && (
+        <FormField label="Durée (minutes)" type="number" value={form.duration} onChange={v => setForm(f => ({ ...f, duration: v }))} placeholder="15" min="1" max="60" />
+      )}
+      {['biberon', 'mixte'].includes(form.type) && (
+        <FormField label="Quantité (ml)" type="number" value={form.quantity} onChange={v => setForm(f => ({ ...f, quantity: v }))} placeholder="120" min="10" max="400" step="5" />
+      )}
+      {form.type === 'solide' && (
+        <FormField label="Aliment(s)" value={form.food} onChange={v => setForm(f => ({ ...f, food: v }))} placeholder="Purée carottes, compote…" />
+      )}
+      <TextareaField label="Notes" value={form.notes} onChange={v => setForm(f => ({ ...f, notes: v }))} placeholder="Appétit, comportement…" rows={2} />
+      <button onClick={onSave}
+        className="w-full bg-gradient-to-r from-blue-400 to-cyan-400 text-white py-3 rounded-xl font-semibold mt-2">
+        Enregistrer
+      </button>
+    </>
+  );
 
   return (
     <div className="px-4 space-y-3">
@@ -488,77 +582,71 @@ function AlimentationTab({ data, onRefresh }: Props) {
       </div>
 
       {/* Bouton ajouter */}
-      <button onClick={() => setShowAdd(true)}
+      <button onClick={openAdd}
         className="w-full bg-gradient-to-r from-blue-400 to-cyan-400 text-white py-3 rounded-2xl font-semibold flex items-center justify-center gap-2">
         <Plus size={18} /> Enregistrer une prise
       </button>
 
-      {sorted.length === 0 && (
+      {data.feeding.length === 0 && (
         <Card className="p-8 text-center">
           <Utensils size={32} className="text-blue-200 mx-auto mb-2" />
           <p className="text-gray-500 text-sm">Aucun enregistrement d'alimentation</p>
         </Card>
       )}
 
-      {sorted.map(entry => {
-        const info = typeInfo(entry.type);
-        return (
-          <Card key={entry.id} className="p-4 scale-in">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-base">{info.emoji}</span>
-                  <span className="text-sm font-semibold text-gray-800">{info.label}</span>
-                  <span className="text-xs text-gray-400 ml-auto">{entry.time}</span>
-                </div>
-                <p className="text-xs text-gray-400">{format(parseISO(entry.date), 'EEEE d MMMM', { locale: fr })}</p>
-                <div className="flex gap-3 mt-1.5 flex-wrap">
-                  {entry.quantity && <span className="text-xs bg-cyan-50 text-cyan-600 px-2 py-0.5 rounded-full font-medium">💧 {entry.quantity} ml</span>}
-                  {entry.duration && <span className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full font-medium">⏱ {fmtDuration(entry.duration)}</span>}
-                  {entry.food && <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium">🥄 {entry.food}</span>}
-                </div>
-                {entry.notes && <p className="text-xs text-gray-400 mt-1">{entry.notes}</p>}
-              </div>
-              <button onClick={() => { deleteFeeding(entry.id); onRefresh(); }} className="p-1 text-gray-200 hover:text-red-400 transition-colors ml-2">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </Card>
-        );
-      })}
+      {/* Aujourd'hui */}
+      {data.feeding.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2">Aujourd'hui</p>
+          {todayFeeds.length === 0 ? (
+            <Card className="p-6 text-center">
+              <p className="text-gray-400 text-sm">Aucune prise enregistrée aujourd'hui</p>
+            </Card>
+          ) : (
+            <div className="space-y-2">{todayFeeds.map(renderEntry)}</div>
+          )}
+        </div>
+      )}
 
-      <Modal open={showAdd} title="Enregistrer une prise" onClose={() => setShowAdd(false)}>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-          <div className="grid grid-cols-3 gap-2">
-            {FEEDING_TYPES.map(t => (
-              <button key={t.value} onClick={() => setForm(f => ({ ...f, type: t.value }))}
-                className={`py-2.5 px-2 rounded-xl text-xs font-medium border transition-all text-center ${
-                  form.type === t.value ? 'bg-blue-50 text-blue-500 border-blue-200' : 'bg-white text-gray-400 border-gray-100'}`}>
-                <div className="text-base mb-0.5">{t.emoji}</div>
-                {t.label}
-              </button>
-            ))}
+      {/* Historique par jour */}
+      {pastDates.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1 mb-2 mt-1">Historique</p>
+          <div className="space-y-2">
+            {pastDates.map(d => {
+              const isOpen = expandedDates.has(d);
+              const total = dayTotalMl(d);
+              const count = dayFeeds(d).length;
+              return (
+                <div key={d}>
+                  <button onClick={() => toggleDate(d)}
+                    className="w-full flex items-center justify-between bg-white border border-pink-50 rounded-xl px-4 py-3 hover:border-pink-100 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {isOpen ? <ChevronDown size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronRight size={16} className="text-gray-400 flex-shrink-0" />}
+                      <span className="text-sm font-medium text-gray-700 capitalize truncate">{format(parseISO(d), 'EEEE d MMMM', { locale: fr })}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      {total > 0 && <span className="text-xs bg-cyan-50 text-cyan-600 px-2 py-0.5 rounded-full font-medium">💧 {total} ml</span>}
+                      <span className="text-xs text-gray-400">{count} prise{count > 1 ? 's' : ''}</span>
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="space-y-2 mt-2">
+                      {dayFeeds(d).map(renderEntry)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <FormField label="Date" type="date" value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
-          <FormField label="Heure" type="time" value={form.time} onChange={v => setForm(f => ({ ...f, time: v }))} />
-        </div>
-        {['sein_gauche', 'sein_droit', 'sein_deux', 'mixte'].includes(form.type) && (
-          <FormField label="Durée (minutes)" type="number" value={form.duration} onChange={v => setForm(f => ({ ...f, duration: v }))} placeholder="15" min="1" max="60" />
-        )}
-        {['biberon', 'mixte'].includes(form.type) && (
-          <FormField label="Quantité (ml)" type="number" value={form.quantity} onChange={v => setForm(f => ({ ...f, quantity: v }))} placeholder="120" min="10" max="400" step="5" />
-        )}
-        {form.type === 'solide' && (
-          <FormField label="Aliment(s)" value={form.food} onChange={v => setForm(f => ({ ...f, food: v }))} placeholder="Purée carottes, compote…" />
-        )}
-        <TextareaField label="Notes" value={form.notes} onChange={v => setForm(f => ({ ...f, notes: v }))} placeholder="Appétit, comportement…" rows={2} />
-        <button onClick={handleAdd}
-          className="w-full bg-gradient-to-r from-blue-400 to-cyan-400 text-white py-3 rounded-xl font-semibold mt-2">
-          Enregistrer
-        </button>
+      )}
+
+      <Modal open={showAdd} title="Enregistrer une prise" onClose={() => setShowAdd(false)}>
+        {feedingModalBody(handleAdd)}
+      </Modal>
+      <Modal open={!!editEntry} title="Modifier la prise" onClose={() => setEditEntry(null)}>
+        {feedingModalBody(handleEdit)}
       </Modal>
     </div>
   );
