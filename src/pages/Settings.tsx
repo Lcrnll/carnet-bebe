@@ -7,6 +7,7 @@ import {
   isCloudConfigured, getFamilyCode,
   saveCloudSettings, getCloudConfig, clearCloudSettings, pullFromCloud, pushToCloud,
 } from '../cloud';
+import { mergeData } from '../merge';
 import { Card } from '../components/Card';
 import { PageHeader } from '../components/PageHeader';
 import { Modal } from '../components/Modal';
@@ -49,7 +50,14 @@ export function Settings({ data, onRefresh }: Props) {
     saveCloudSettings(getCloudConfig(), familyCode);
     setSyncing(true);
     try {
-      await pushToCloud(data);
+      // On récupère d'abord ce qui existe déjà côté cloud pour ce code, et on
+      // fusionne avec les données locales avant de renvoyer quoi que ce soit.
+      // Sans ça, un appareil vide (nouvel appareil, cache vidé…) qui rejoint
+      // un code déjà utilisé écraserait les données de la famille avec du vide.
+      const cloudData = await pullFromCloud();
+      const merged = cloudData ? mergeData(data, cloudData) : data;
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(merged));
+      await pushToCloud(merged);
       setSyncOk(true);
     } catch {
       setSyncOk(false);
