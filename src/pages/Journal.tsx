@@ -14,7 +14,7 @@ import { FormField, TextareaField } from '../components/FormField';
 
 interface Props { data: AppData; onRefresh: () => void; }
 
-type Tab = 'notes' | 'sommeil' | 'alimentation' | 'jalons';
+type Tab = 'notes' | 'maladie' | 'sommeil' | 'alimentation' | 'jalons';
 
 // ─── CONSTANTES ─────────────────────────────────────────────────────────────
 
@@ -58,6 +58,7 @@ function fmtDuration(mins?: number) {
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'notes',        label: 'Moments',   icon: <FileText size={15} /> },
+  { id: 'maladie',      label: 'Maladie',   icon: <Thermometer size={15} /> },
   { id: 'sommeil',      label: 'Sommeil',   icon: <Moon size={15} /> },
   { id: 'alimentation', label: 'Biberon',   icon: <Utensils size={15} /> },
   { id: 'jalons',       label: 'Jalons',    icon: <Star size={15} /> },
@@ -86,7 +87,7 @@ export function Journal({ data, onRefresh }: Props) {
       <div className="bg-gradient-to-br from-purple-400 via-pink-300 to-pink-400 px-5 pt-12 pb-6 text-white">
         <p className="text-purple-100 text-sm font-medium">Journal de bébé</p>
         <h1 className="text-3xl font-bold mt-1">📓 Journal</h1>
-        <p className="text-purple-100 text-sm mt-1">Moments · Sommeil · Alimentation · Jalons</p>
+        <p className="text-purple-100 text-sm mt-1">Moments · Maladie · Sommeil · Alimentation · Jalons</p>
       </div>
 
       {/* Tab bar */}
@@ -110,7 +111,8 @@ export function Journal({ data, onRefresh }: Props) {
       </div>
 
       <div className="mt-3">
-        {tab === 'notes'        && <NotesTab        data={data} onRefresh={onRefresh} />}
+        {tab === 'notes'        && <MomentsTab      data={data} onRefresh={onRefresh} />}
+        {tab === 'maladie'      && <MaladieTab      data={data} onRefresh={onRefresh} />}
         {tab === 'sommeil'      && <SommeilTab      data={data} onRefresh={onRefresh} />}
         {tab === 'alimentation' && <AlimentationTab data={data} onRefresh={onRefresh} />}
         {tab === 'jalons'       && <JalonsTab       data={data} onRefresh={onRefresh} />}
@@ -120,43 +122,27 @@ export function Journal({ data, onRefresh }: Props) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TAB : NOTES
+// TAB : MOMENTS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function NotesTab({ data, onRefresh }: Props) {
+function MomentsTab({ data, onRefresh }: Props) {
   const [showAdd, setShowAdd] = useState(false);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'note' | 'symptom'>('all');
-  const [form, setForm] = useState({
-    date: today(),
-    type: 'note' as 'note' | 'symptom',
-    content: '',
-    temperature: '',
-    symptoms: [] as string[],
-    mood: '',
-  });
-
-  const toggleSymptom = (s: string) =>
-    setForm(f => ({ ...f, symptoms: f.symptoms.includes(s) ? f.symptoms.filter(x => x !== s) : [...f.symptoms, s] }));
+  const [form, setForm] = useState({ date: today(), content: '', mood: '' });
 
   const handleAdd = () => {
-    if (!form.content && form.symptoms.length === 0) return;
-    const entry: NoteEntry = {
-      id: uid(), date: form.date, type: form.type, content: form.content,
-      temperature: form.temperature ? Number(form.temperature) : undefined,
-      symptoms: form.symptoms, mood: form.mood || undefined,
-    };
+    if (!form.content) return;
+    const entry: NoteEntry = { id: uid(), date: form.date, type: 'note', content: form.content, symptoms: [], mood: form.mood || undefined };
     addNote(entry);
     onRefresh();
-    setForm({ date: today(), type: 'note', content: '', temperature: '', symptoms: [], mood: '' });
+    setForm({ date: today(), content: '', mood: '' });
     setShowAdd(false);
   };
 
   const filtered = data.notes.filter(n => {
-    const matchType = typeFilter === 'all' || n.type === typeFilter;
+    if (n.type !== 'note') return false;
     const q = search.toLowerCase();
-    const matchSearch = !q || n.content.toLowerCase().includes(q) || n.symptoms.some(s => s.toLowerCase().includes(q));
-    return matchType && matchSearch;
+    return !q || n.content.toLowerCase().includes(q);
   });
 
   return (
@@ -174,21 +160,11 @@ function NotesTab({ data, onRefresh }: Props) {
         </button>
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-        {([['all', 'Tout'], ['note', '📝 Notes'], ['symptom', '🌡️ Symptômes']] as const).map(([val, label]) => (
-          <button key={val} onClick={() => setTypeFilter(val)}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${typeFilter === val ? 'bg-white text-pink-500 shadow-sm' : 'text-gray-500'}`}>
-            {label}
-          </button>
-        ))}
-      </div>
-
       {filtered.length === 0 && (
         <Card className="p-8 text-center">
           <FileText size={32} className="text-pink-200 mx-auto mb-2" />
-          <p className="text-gray-500 text-sm">Aucune note pour l'instant</p>
-          <button onClick={() => setShowAdd(true)} className="mt-3 text-pink-400 text-sm font-medium">+ Ajouter une note</button>
+          <p className="text-gray-500 text-sm">Aucun moment pour l'instant</p>
+          <button onClick={() => setShowAdd(true)} className="mt-3 text-pink-400 text-sm font-medium">+ Ajouter un moment</button>
         </Card>
       )}
 
@@ -196,25 +172,8 @@ function NotesTab({ data, onRefresh }: Props) {
         <Card key={note.id} className="p-4 scale-in">
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${note.type === 'symptom' ? 'bg-red-50 text-red-400' : 'bg-blue-50 text-blue-400'}`}>
-                  {note.type === 'symptom' ? '🌡️ Symptôme' : '📝 Note'}
-                </span>
-                <span className="text-xs text-gray-400">{format(parseISO(note.date), 'EEEE d MMMM', { locale: fr })}</span>
-              </div>
-              {note.content && <p className="text-sm text-gray-700 leading-relaxed">{note.content}</p>}
-              {note.temperature && (
-                <div className="flex items-center gap-1 mt-1.5">
-                  <Thermometer size={12} className="text-red-400" />
-                  <span className="text-xs font-semibold text-red-500">{note.temperature}°C</span>
-                  {note.temperature >= 38 && <span className="text-xs bg-red-50 text-red-400 px-1.5 py-0.5 rounded-full">Fièvre</span>}
-                </div>
-              )}
-              {note.symptoms.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {note.symptoms.map(s => <span key={s} className="text-xs bg-orange-50 text-orange-400 px-2 py-0.5 rounded-full">{s}</span>)}
-                </div>
-              )}
+              <span className="text-xs text-gray-400">{format(parseISO(note.date), 'EEEE d MMMM', { locale: fr })}</span>
+              <p className="text-sm text-gray-700 leading-relaxed mt-1">{note.content}</p>
               {note.mood && <p className="text-xs text-gray-400 mt-1.5">😊 {note.mood}</p>}
             </div>
             <button onClick={() => { deleteNote(note.id); onRefresh(); }} className="p-1 text-gray-200 hover:text-red-400 transition-colors ml-2">
@@ -224,33 +183,9 @@ function NotesTab({ data, onRefresh }: Props) {
         </Card>
       ))}
 
-      <Modal open={showAdd} title="Nouvelle note" onClose={() => setShowAdd(false)}>
-        <div className="flex gap-2 mb-4">
-          {(['note', 'symptom'] as const).map(t => (
-            <button key={t} onClick={() => setForm(f => ({ ...f, type: t }))}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all border ${form.type === t ? 'bg-pink-50 text-pink-500 border-pink-200' : 'bg-white text-gray-400 border-gray-100'}`}>
-              {t === 'note' ? '📝 Note' : '🌡️ Symptôme'}
-            </button>
-          ))}
-        </div>
+      <Modal open={showAdd} title="✨ Moment particulier" onClose={() => setShowAdd(false)}>
         <FormField label="Date" type="date" value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
-        {form.type === 'symptom' && (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Symptômes</label>
-              <div className="flex flex-wrap gap-2">
-                {SYMPTOMS.map(s => (
-                  <button key={s} onClick={() => toggleSymptom(s)}
-                    className={`text-xs px-2.5 py-1.5 rounded-full border transition-all ${form.symptoms.includes(s) ? 'bg-orange-50 text-orange-500 border-orange-200' : 'bg-gray-50 text-gray-500 border-gray-100'}`}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <FormField label="Température (°C)" type="number" value={form.temperature} onChange={v => setForm(f => ({ ...f, temperature: v }))} placeholder="37.5" step="0.1" min="35" max="43" />
-          </>
-        )}
-        <TextareaField label="Note" value={form.content} onChange={v => setForm(f => ({ ...f, content: v }))} placeholder="Observations, comportement, remarques…" rows={3} />
+        <TextareaField label="Que s'est-il passé ?" value={form.content} onChange={v => setForm(f => ({ ...f, content: v }))} placeholder="Observations, comportement, remarques…" rows={3} />
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">Humeur</label>
           <div className="flex flex-wrap gap-2">
@@ -262,8 +197,98 @@ function NotesTab({ data, onRefresh }: Props) {
             ))}
           </div>
         </div>
-        <button onClick={handleAdd} disabled={!form.content && form.symptoms.length === 0}
+        <button onClick={handleAdd} disabled={!form.content}
           className="w-full bg-gradient-to-r from-pink-400 to-purple-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 mt-2">
+          Enregistrer
+        </button>
+      </Modal>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB : MALADIE
+// ═══════════════════════════════════════════════════════════════════════════
+
+function MaladieTab({ data, onRefresh }: Props) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ date: today(), content: '', temperature: '', symptoms: [] as string[] });
+
+  const toggleSymptom = (s: string) =>
+    setForm(f => ({ ...f, symptoms: f.symptoms.includes(s) ? f.symptoms.filter(x => x !== s) : [...f.symptoms, s] }));
+
+  const handleAdd = () => {
+    if (form.symptoms.length === 0 && !form.temperature && !form.content) return;
+    const entry: NoteEntry = {
+      id: uid(), date: form.date, type: 'symptom', content: form.content,
+      temperature: form.temperature ? Number(form.temperature) : undefined,
+      symptoms: form.symptoms,
+    };
+    addNote(entry);
+    onRefresh();
+    setForm({ date: today(), content: '', temperature: '', symptoms: [] });
+    setShowAdd(false);
+  };
+
+  const sorted = data.notes.filter(n => n.type === 'symptom').sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <div className="px-4 space-y-3">
+      <button onClick={() => setShowAdd(true)}
+        className="w-full bg-gradient-to-r from-red-400 to-orange-400 text-white py-3 rounded-2xl font-semibold flex items-center justify-center gap-2">
+        <Plus size={18} /> Signaler un symptôme
+      </button>
+
+      {sorted.length === 0 && (
+        <Card className="p-8 text-center">
+          <Thermometer size={32} className="text-red-200 mx-auto mb-2" />
+          <p className="text-gray-500 text-sm">Aucun épisode enregistré</p>
+        </Card>
+      )}
+
+      {sorted.map(entry => (
+        <Card key={entry.id} className="p-4 scale-in">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <span className="text-xs text-gray-400">{format(parseISO(entry.date), 'EEEE d MMMM', { locale: fr })}</span>
+              {entry.temperature && (
+                <div className="flex items-center gap-1 mt-1">
+                  <Thermometer size={12} className="text-red-400" />
+                  <span className="text-xs font-semibold text-red-500">{entry.temperature}°C</span>
+                  {entry.temperature >= 38 && <span className="text-xs bg-red-50 text-red-400 px-1.5 py-0.5 rounded-full">Fièvre</span>}
+                </div>
+              )}
+              {entry.symptoms.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {entry.symptoms.map(s => <span key={s} className="text-xs bg-orange-50 text-orange-400 px-2 py-0.5 rounded-full">{s}</span>)}
+                </div>
+              )}
+              {entry.content && <p className="text-sm text-gray-700 leading-relaxed mt-1.5">{entry.content}</p>}
+            </div>
+            <button onClick={() => { deleteNote(entry.id); onRefresh(); }} className="p-1 text-gray-200 hover:text-red-400 transition-colors ml-2">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </Card>
+      ))}
+
+      <Modal open={showAdd} title="🌡️ Signaler un symptôme" onClose={() => setShowAdd(false)}>
+        <FormField label="Date" type="date" value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Symptômes</label>
+          <div className="flex flex-wrap gap-2">
+            {SYMPTOMS.map(s => (
+              <button key={s} onClick={() => toggleSymptom(s)}
+                className={`text-xs px-2.5 py-1.5 rounded-full border transition-all ${form.symptoms.includes(s) ? 'bg-orange-50 text-orange-500 border-orange-200' : 'bg-gray-50 text-gray-500 border-gray-100'}`}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+        <FormField label="Température (°C)" type="number" value={form.temperature} onChange={v => setForm(f => ({ ...f, temperature: v }))} placeholder="37.5" step="0.1" min="35" max="43" />
+        <TextareaField label="Notes" value={form.content} onChange={v => setForm(f => ({ ...f, content: v }))} placeholder="Évolution, remarques…" rows={3} />
+        <button onClick={handleAdd} disabled={form.symptoms.length === 0 && !form.temperature && !form.content}
+          className="w-full bg-gradient-to-r from-red-400 to-orange-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 mt-2">
           Enregistrer
         </button>
       </Modal>
