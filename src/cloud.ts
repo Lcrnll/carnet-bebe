@@ -11,6 +11,7 @@ import {
 import type { AppData } from './types';
 import { defaultVaccines } from './data/vaccines';
 import { defaultChecklist } from './data/checklist';
+import { defaultDevelopmentMilestones } from './data/development';
 
 const CONFIG_KEY = 'carnet-bebe-firebase';
 const FAMILY_KEY  = 'carnet-bebe-family';
@@ -97,6 +98,7 @@ export async function pullFromCloud(): Promise<AppData | null> {
       sleep:        raw.sleep        ?? [],
       feeding:      raw.feeding      ?? [],
       milestones:   raw.milestones   ?? [],
+      development:  raw.development?.length ? raw.development : defaultDevelopmentMilestones(),
     };
   } catch (e) {
     console.error('[cloud] pull error', e);
@@ -137,6 +139,7 @@ export function subscribeToCloud(callback: (data: AppData) => void): Unsubscribe
         sleep:        raw.sleep        ?? [],
         feeding:      raw.feeding      ?? [],
         milestones:   raw.milestones   ?? [],
+        development:  raw.development?.length ? raw.development : defaultDevelopmentMilestones(),
       });
     },
     (err) => console.error('[cloud] subscribe error', err)

@@ -1,28 +1,15 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { differenceInWeeks, differenceInMonths, format, parseISO, addMonths, differenceInDays } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import {
-  Scale, Ruler, Calendar, Shield, Edit2, Check, Droplet,
-  Pill, Phone, TrendingUp, Utensils, AlertCircle,
-} from 'lucide-react';
-import type { AppData, BabyProfile, GrowthEntry } from '../types';
-import { saveProfile, addGrowth, uid } from '../storage';
+import { differenceInWeeks, differenceInMonths, format, parseISO, differenceInDays } from 'date-fns';
+import { Edit2, Droplets, Utensils, Sparkles } from 'lucide-react';
+import type { AppData, BabyProfile, FeedingEntry, NoteEntry } from '../types';
+import { saveProfile, addFeeding, addNote, uid } from '../storage';
 import { Card } from '../components/Card';
 import { Modal } from '../components/Modal';
-import { FormField, SelectField } from '../components/FormField';
+import { FormField, SelectField, TextareaField } from '../components/FormField';
 
 interface Props { data: AppData; onRefresh: () => void; }
 
 const BLOOD_TYPES = ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-
-// Numéros d'urgence par défaut
-const DEFAULT_EMERGENCY = [
-  { label: 'SAMU', value: '15', notes: 'Urgences médicales' },
-  { label: 'Pompiers', value: '18', notes: 'Secours' },
-  { label: '🇪🇺 Urgences EU', value: '112', notes: 'Europe' },
-  { label: 'Antipoison', value: '09 74 75 00 00', notes: 'Intoxications' },
-];
 
 function getAge(birthDate: string) {
   const bd = parseISO(birthDate);
@@ -36,52 +23,21 @@ function getAge(birthDate: string) {
   return rem > 0 ? `${years} an${years > 1 ? 's' : ''} et ${rem} mois` : `${years} an${years > 1 ? 's' : ''}`;
 }
 
-function getNextVaccine(data: AppData) {
-  if (!data.profile) return null;
-  const bd = parseISO(data.profile.birthDate);
-  const pending = data.vaccines.filter(v => !v.done);
-  if (!pending.length) return null;
-  const sorted = [...pending].sort((a, b) => a.scheduledAgeMonths - b.scheduledAgeMonths);
-  const next = sorted[0];
-  const dueDate = addMonths(bd, next.scheduledAgeMonths);
-  return { name: next.name, dueDate, age: next.scheduledAge };
-}
-
-function getNextAppointment(data: AppData) {
-  const upcoming = data.appointments
-    .filter(a => a.status === 'upcoming')
-    .sort((a, b) => a.date.localeCompare(b.date));
-  return upcoming[0] || null;
-}
-
-function getLastMeasure(data: AppData, field: 'weight' | 'height') {
-  const entries = [...data.growth]
-    .filter(g => g[field] !== undefined)
-    .sort((a, b) => b.date.localeCompare(a.date));
-  return entries[0] || null;
-}
-
-// Calcul dose Doliprane (paracétamol)
-function calcDoliprane(weightG: number) {
-  const kg = weightG / 1000;
-  const dose = Math.round(kg * 15); // 15 mg/kg par prise
-  const doseMax = Math.min(Math.round(kg * 60), 4000); // 60 mg/kg/jour
-  const ml = +(dose / 24).toFixed(1); // Doliprane 2,4% (24 mg/ml)
-  const sachet80 = Math.round(dose / 80 * 10) / 10;
-  const sachet100 = Math.round(dose / 100 * 10) / 10;
-  return { dose, doseMax, ml, sachet80, sachet100 };
-}
+const today = () => format(new Date(), 'yyyy-MM-dd');
+const nowTime = () => format(new Date(), 'HH:mm');
 
 export function Dashboard({ data, onRefresh }: Props) {
-  const navigate = useNavigate();
   const [showEdit, setShowEdit] = useState(!data.profile);
-  const [showDoliprane, setShowDoliprane] = useState(false);
-  const [showAddWeight, setShowAddWeight] = useState(false);
-  const [weightForm, setWeightForm] = useState({ weight: '', height: '', date: format(new Date(), 'yyyy-MM-dd') });
+  const [showAddBottle, setShowAddBottle] = useState(false);
+  const [showMoment, setShowMoment] = useState(false);
+  const [bottleForm, setBottleForm] = useState({ time: nowTime(), quantity: '' });
+  const [momentForm, setMomentForm] = useState({ content: '' });
 
   const [form, setForm] = useState<BabyProfile>(data.profile || {
     name: '', birthDate: '', birthWeight: 0, birthHeight: 0, birthHeadCirc: 0, bloodType: '',
   });
+
+  const profile = data.profile;
 
   const handleSave = () => {
     if (!form.name || !form.birthDate) return;
@@ -95,250 +51,94 @@ export function Dashboard({ data, onRefresh }: Props) {
     setShowEdit(true);
   };
 
-  const handleAddWeight = () => {
-    if (!weightForm.weight && !weightForm.height) return;
-    const entry: GrowthEntry = {
-      id: uid(),
-      date: weightForm.date,
-      weight: weightForm.weight ? Math.round(Number(weightForm.weight) * 1000) : undefined,
-      height: weightForm.height ? Number(weightForm.height) : undefined,
-      notes: '',
+  const handleAddBottle = () => {
+    if (!bottleForm.quantity) return;
+    const entry: FeedingEntry = {
+      id: uid(), date: today(), time: bottleForm.time, type: 'biberon',
+      quantity: Number(bottleForm.quantity),
     };
-    addGrowth(entry);
+    addFeeding(entry);
     onRefresh();
-    setWeightForm({ weight: '', height: '', date: format(new Date(), 'yyyy-MM-dd') });
-    setShowAddWeight(false);
+    setBottleForm({ time: nowTime(), quantity: '' });
+    setShowAddBottle(false);
   };
 
-  const profile = data.profile;
-  const lastWeight = getLastMeasure(data, 'weight');
-  const lastHeight = getLastMeasure(data, 'height');
-  const nextVaccine = profile ? getNextVaccine(data) : null;
-  const nextAppt = profile ? getNextAppointment(data) : null;
+  const handleAddMoment = () => {
+    if (!momentForm.content) return;
+    const entry: NoteEntry = { id: uid(), date: today(), type: 'note', content: momentForm.content, symptoms: [] };
+    addNote(entry);
+    onRefresh();
+    setMomentForm({ content: '' });
+    setShowMoment(false);
+  };
 
-  // Contacts d'urgence : priorité aux données documents, sinon défauts
-  const urgencyContacts = data.documents.filter(d => d.category === 'urgence').length > 0
-    ? data.documents.filter(d => d.category === 'urgence').slice(0, 4)
-    : DEFAULT_EMERGENCY;
-
-  // Poids courant pour Doliprane
-  const currentWeightG = lastWeight?.weight ?? profile?.birthWeight ?? 0;
-  const doli = currentWeightG > 0 ? calcDoliprane(currentWeightG) : null;
+  const todayStr = today();
+  const todayBottles = data.feeding.filter(f => f.date === todayStr && (f.type === 'biberon' || f.type === 'mixte') && f.quantity);
+  const totalMlToday = todayBottles.reduce((acc, f) => acc + (f.quantity ?? 0), 0);
+  const momentsToday = data.notes.filter(n => n.date === todayStr && n.type === 'note').length;
 
   return (
-    <div className="pb-24 fade-in">
+    <div className="pb-24 fade-in min-h-svh flex flex-col">
       {/* Hero */}
-      <div className="bg-gradient-to-br from-pink-400 via-pink-300 to-purple-300 px-5 pt-12 pb-8 text-white">
+      <div className="bg-gradient-to-br from-pink-400 via-pink-300 to-purple-300 px-5 pt-10 pb-5 text-white">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-pink-100 text-sm font-medium">Mon carnet de santé</p>
-            <h1 className="text-3xl font-bold mt-1">
+            <h1 className="text-2xl font-bold mt-1">
               {profile ? `💕 ${profile.name}` : 'Bébé'}
             </h1>
             {profile && (
-              <div className="flex items-center gap-2 flex-wrap mt-1">
-                <p className="text-pink-100 text-sm">
-                  Née le {format(parseISO(profile.birthDate), 'd MMMM yyyy', { locale: fr })}
-                </p>
-                {profile.bloodType && (
-                  <span className="bg-white/25 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    🩸 {profile.bloodType}
-                  </span>
-                )}
-              </div>
+              <p className="text-pink-100 text-sm mt-0.5">
+                {getAge(profile.birthDate)} · {differenceInDays(new Date(), parseISO(profile.birthDate))} jours de vie
+              </p>
             )}
           </div>
           <button onClick={openEdit} className="bg-white/20 backdrop-blur p-2 rounded-full hover:bg-white/30 transition-colors">
             <Edit2 size={18} />
           </button>
         </div>
-
-        {profile && (
-          <div className="mt-5 bg-white/20 backdrop-blur rounded-2xl px-4 py-3">
-            <p className="text-xs text-pink-100 uppercase tracking-wide font-medium">Âge</p>
-            <p className="text-2xl font-bold mt-0.5">{getAge(profile.birthDate)}</p>
-            <p className="text-xs text-pink-100 mt-0.5">
-              {differenceInDays(new Date(), parseISO(profile.birthDate))} jours de vie
-            </p>
-          </div>
-        )}
       </div>
 
-      <div className="px-4 -mt-4 space-y-3">
-        {/* Quick stats — poids + taille + groupe sanguin */}
-        {profile && (
-          <div className="grid grid-cols-3 gap-3">
-            <Card className="p-3 text-center">
-              <Scale size={18} className="text-pink-400 mx-auto mb-1" />
-              <p className="text-xs text-gray-500">Dernier poids</p>
-              <p className="text-sm font-bold text-gray-800">
-                {lastWeight?.weight
-                  ? `${(lastWeight.weight / 1000).toFixed(2)} kg`
-                  : `${(profile.birthWeight / 1000).toFixed(2)} kg`}
-              </p>
-              <p className="text-xs text-gray-400">
-                {lastWeight ? format(parseISO(lastWeight.date), 'd MMM', { locale: fr }) : 'naissance'}
-              </p>
-            </Card>
-            <Card className="p-3 text-center">
-              <Ruler size={18} className="text-purple-400 mx-auto mb-1" />
-              <p className="text-xs text-gray-500">Dernière taille</p>
-              <p className="text-sm font-bold text-gray-800">
-                {lastHeight?.height ? `${lastHeight.height} cm` : `${profile.birthHeight} cm`}
-              </p>
-              <p className="text-xs text-gray-400">
-                {lastHeight ? format(parseISO(lastHeight.date), 'd MMM', { locale: fr }) : 'naissance'}
-              </p>
-            </Card>
-            <Card className="p-3 text-center">
-              <Droplet size={18} className="text-red-400 mx-auto mb-1" />
-              <p className="text-xs text-gray-500">Groupe sanguin</p>
-              <p className="text-sm font-bold text-gray-800">
-                {profile.bloodType || '—'}
-              </p>
-              <p className="text-xs text-gray-400">profil</p>
-            </Card>
-          </div>
-        )}
+      {profile && (
+        <div className="px-4 -mt-3 space-y-3 flex-1">
+          {/* Biberons du jour */}
+          <Card className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 bg-cyan-50 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Droplets size={22} className="text-cyan-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs text-gray-500 font-medium">Biberons aujourd'hui</p>
+                <p className="text-xl font-bold text-gray-800">
+                  {totalMlToday > 0 ? `${totalMlToday} ml` : '–'}
+                  {todayBottles.length > 0 && <span className="text-sm text-gray-400 font-normal ml-1.5">· {todayBottles.length} prise{todayBottles.length > 1 ? 's' : ''}</span>}
+                </p>
+              </div>
+            </div>
+          </Card>
 
-        {/* Raccourcis rapides */}
-        {profile && (
-          <div className="grid grid-cols-3 gap-2">
+          {/* Raccourcis */}
+          <div className="grid grid-cols-2 gap-3">
             <button
-              onClick={() => setShowAddWeight(true)}
-              className="bg-gradient-to-br from-pink-400 to-pink-500 text-white rounded-2xl py-3 px-2 flex flex-col items-center gap-1 active:scale-95 transition-transform">
-              <Scale size={20} />
-              <span className="text-xs font-semibold">+ Poids</span>
+              onClick={() => setShowAddBottle(true)}
+              className="bg-gradient-to-br from-blue-400 to-cyan-400 text-white rounded-2xl py-5 px-3 flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
+              <Utensils size={24} />
+              <span className="text-sm font-semibold">+ Biberon</span>
             </button>
             <button
-              onClick={() => navigate('/journal?tab=notes', { state: { openAdd: true, type: 'symptom' } })}
-              className="bg-gradient-to-br from-orange-400 to-red-400 text-white rounded-2xl py-3 px-2 flex flex-col items-center gap-1 active:scale-95 transition-transform">
-              <TrendingUp size={20} />
-              <span className="text-xs font-semibold">+ Symptôme</span>
-            </button>
-            <button
-              onClick={() => navigate('/journal?tab=alimentation')}
-              className="bg-gradient-to-br from-blue-400 to-cyan-400 text-white rounded-2xl py-3 px-2 flex flex-col items-center gap-1 active:scale-95 transition-transform">
-              <Utensils size={20} />
-              <span className="text-xs font-semibold">+ Biberon</span>
+              onClick={() => setShowMoment(true)}
+              className="bg-gradient-to-br from-amber-400 to-orange-400 text-white rounded-2xl py-5 px-3 flex flex-col items-center gap-1.5 active:scale-95 transition-transform">
+              <Sparkles size={24} />
+              <span className="text-sm font-semibold">Moment particulier</span>
+              {momentsToday > 0 && <span className="text-xs text-amber-100">{momentsToday} aujourd'hui</span>}
             </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Next appointment — toujours visible */}
-        {profile && (
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                <Calendar size={20} className="text-blue-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-500 font-medium">Prochain rendez-vous</p>
-                {nextAppt ? (
-                  <>
-                    <p className="text-sm font-semibold text-gray-800 truncate">{nextAppt.title}</p>
-                    <p className="text-xs text-gray-500">
-                      {format(parseISO(nextAppt.date), 'd MMM yyyy', { locale: fr })}
-                      {nextAppt.time && ` à ${nextAppt.time}`}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-sm text-gray-400">Aucun RDV prévu</p>
-                )}
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* Next vaccine */}
-        {nextVaccine && (
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                <Shield size={20} className="text-green-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-500 font-medium">Prochain vaccin</p>
-                <p className="text-sm font-semibold text-gray-800 truncate">{nextVaccine.name}</p>
-                <p className="text-xs text-gray-500">
-                  À {nextVaccine.age} — {format(nextVaccine.dueDate, 'd MMM yyyy', { locale: fr })}
-                </p>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* Calculateur Doliprane */}
-        {profile && currentWeightG > 0 && (
-          <Card className="p-4" onClick={() => setShowDoliprane(true)}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
-                <Pill size={20} className="text-amber-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-500 font-medium">Calculateur Doliprane</p>
-                <p className="text-sm font-semibold text-gray-800">
-                  {doli ? `${doli.dose} mg par prise` : 'Appuyez pour calculer'}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {doli ? `≈ ${doli.ml} ml (sirop 2,4%)` : ''}
-                </p>
-              </div>
-              <div className="text-gray-300 text-xs">›</div>
-            </div>
-          </Card>
-        )}
-
-        {/* Contacts d'urgence */}
-        {profile && (
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertCircle size={16} className="text-red-400" />
-              <p className="text-sm font-semibold text-gray-700">Contacts d'urgence</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {urgencyContacts.map((contact, i) => (
-                <a
-                  key={i}
-                  href={`tel:${contact.value.replace(/\s/g, '')}`}
-                  className="flex items-center gap-2 bg-red-50 rounded-xl px-3 py-2 active:scale-95 transition-transform no-underline"
-                >
-                  <Phone size={14} className="text-red-400 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-red-500 truncate">{contact.label}</p>
-                    <p className="text-xs text-red-400 font-mono">{contact.value}</p>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Checklist progress */}
-        {data.checklist.length > 0 && (
-          <Card className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center">
-                <Check size={20} className="text-pink-400" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Suivi premières semaines</p>
-                <p className="text-sm font-semibold text-gray-800">
-                  {data.checklist.filter(c => c.done).length} / {data.checklist.length} réalisés
-                </p>
-              </div>
-            </div>
-            <div className="w-full bg-pink-50 rounded-full h-2">
-              <div
-                className="bg-gradient-to-r from-pink-400 to-purple-400 h-2 rounded-full transition-all"
-                style={{ width: `${(data.checklist.filter(c => c.done).length / data.checklist.length) * 100}%` }}
-              />
-            </div>
-          </Card>
-        )}
-
-        {/* Welcome card when no profile */}
-        {!profile && (
+      {/* Welcome card when no profile */}
+      {!profile && (
+        <div className="px-4 -mt-3">
           <Card className="p-6 text-center">
             <div className="text-5xl mb-3">👶</div>
             <h2 className="text-lg font-semibold text-gray-800 mb-2">Bienvenue !</h2>
@@ -356,63 +156,35 @@ export function Dashboard({ data, onRefresh }: Props) {
               <span className="text-pink-400 font-medium">Réglages ⚙️ → Activer la synchronisation</span>
             </p>
           </Card>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Modal Doliprane */}
-      <Modal open={showDoliprane} title="💊 Calculateur Doliprane" onClose={() => setShowDoliprane(false)}>
-        {doli && (
-          <div className="space-y-4">
-            <div className="bg-amber-50 rounded-2xl p-4 text-center">
-              <p className="text-xs text-amber-600 font-medium mb-1">Poids actuel</p>
-              <p className="text-2xl font-bold text-amber-700">{(currentWeightG / 1000).toFixed(2)} kg</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-amber-400 to-orange-400 rounded-2xl p-5 text-white text-center">
-              <p className="text-sm font-medium text-amber-100 mb-1">Dose par prise (15 mg/kg)</p>
-              <p className="text-4xl font-bold">{doli.dose} mg</p>
-              <p className="text-amber-100 text-sm mt-1">max {doli.doseMax} mg/jour (4 prises)</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Card className="p-4 text-center">
-                <p className="text-xs text-gray-500 mb-1">💧 Sirop 2,4%</p>
-                <p className="text-xl font-bold text-gray-800">{doli.ml} ml</p>
-                <p className="text-xs text-gray-400">Doliprane nourrissons</p>
-              </Card>
-              <Card className="p-4 text-center">
-                <p className="text-xs text-gray-500 mb-1">📦 Sachet 80 mg</p>
-                <p className="text-xl font-bold text-gray-800">
-                  {doli.sachet80 >= 1 ? Math.round(doli.sachet80) : `½`}
-                </p>
-                <p className="text-xs text-gray-400">sachet{doli.sachet80 >= 2 ? 's' : ''}</p>
-              </Card>
-            </div>
-
-            <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-              <p className="text-xs font-semibold text-gray-600 mb-2">ℹ️ Rappels importants</p>
-              <p className="text-xs text-gray-500">• Minimum 6h entre chaque prise</p>
-              <p className="text-xs text-gray-500">• Maximum 4 prises par 24h</p>
-              <p className="text-xs text-gray-500">• Si fièvre &gt; 38°C chez un nourrisson &lt; 3 mois : consultez un médecin</p>
-              <p className="text-xs text-gray-500">• Ne pas combiner avec d'autres produits à base de paracétamol</p>
-            </div>
-
-            <p className="text-xs text-gray-400 text-center">
-              Ces valeurs sont indicatives. Consultez toujours un médecin ou pharmacien.
-            </p>
-          </div>
-        )}
+      {/* Modal ajout rapide biberon */}
+      <Modal open={showAddBottle} title="🍼 Ajouter une prise" onClose={() => setShowAddBottle(false)}>
+        <FormField label="Heure" type="time" value={bottleForm.time} onChange={v => setBottleForm(f => ({ ...f, time: v }))} />
+        <FormField label="Quantité (ml)" type="number" value={bottleForm.quantity} onChange={v => setBottleForm(f => ({ ...f, quantity: v }))} placeholder="120" min="10" max="400" step="5" />
+        <button
+          onClick={handleAddBottle}
+          disabled={!bottleForm.quantity}
+          className="w-full bg-gradient-to-r from-blue-400 to-cyan-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 mt-2">
+          Enregistrer
+        </button>
       </Modal>
 
-      {/* Modal ajout rapide poids */}
-      <Modal open={showAddWeight} title="⚖️ Ajouter un poids" onClose={() => setShowAddWeight(false)}>
-        <FormField label="Date" type="date" value={weightForm.date} onChange={v => setWeightForm(f => ({ ...f, date: v }))} />
-        <FormField label="Poids (kg)" type="number" value={weightForm.weight} onChange={v => setWeightForm(f => ({ ...f, weight: v }))} placeholder="5.23" step="0.01" min="0" max="30" />
-        <FormField label="Taille (cm)" type="number" value={weightForm.height} onChange={v => setWeightForm(f => ({ ...f, height: v }))} placeholder="56" step="0.1" min="0" max="120" />
+      {/* Modal moment particulier */}
+      <Modal open={showMoment} title="✨ Moment particulier" onClose={() => setShowMoment(false)}>
+        <TextareaField
+          label="Que s'est-il passé ?"
+          value={momentForm.content}
+          onChange={v => setMomentForm({ content: v })}
+          placeholder="Ex : a beaucoup pleuré avant le coucher, a bien dormi après le bain…"
+          rows={4}
+        />
+        <p className="text-xs text-gray-400 -mt-2 mb-3">Enregistré dans le Journal, onglet Moments.</p>
         <button
-          onClick={handleAddWeight}
-          disabled={!weightForm.weight && !weightForm.height}
-          className="w-full bg-gradient-to-r from-pink-400 to-purple-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50 mt-2">
+          onClick={handleAddMoment}
+          disabled={!momentForm.content}
+          className="w-full bg-gradient-to-r from-amber-400 to-orange-400 text-white py-3 rounded-xl font-semibold disabled:opacity-50">
           Enregistrer
         </button>
       </Modal>
