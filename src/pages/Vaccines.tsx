@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO, addMonths, isBefore } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Shield, ShieldCheck, AlertCircle, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
+import { Shield, ShieldCheck, AlertCircle, ChevronDown, ChevronUp, Plus, Trash2, Syringe } from 'lucide-react';
 import type { AppData, Vaccine } from '../types';
 import { addVaccine, updateVaccine, deleteVaccine, uid } from '../storage';
 import { PageHeader } from '../components/PageHeader';
@@ -9,7 +9,7 @@ import { Card } from '../components/Card';
 import { Modal } from '../components/Modal';
 import { FormField, TextareaField } from '../components/FormField';
 
-interface Props { data: AppData; onRefresh: () => void; }
+interface Props { data: AppData; onRefresh: () => void; embedded?: boolean; }
 
 const emptyVaccineForm = () => ({ name: '', scheduledAge: '', scheduledAgeMonths: '', diseases: '' });
 
@@ -29,7 +29,16 @@ function isUpcoming(vaccine: Vaccine, birthDate: string | undefined): boolean {
   return isBefore(due, soon);
 }
 
-export function Vaccines({ data, onRefresh }: Props) {
+function getNextVaccine(data: AppData) {
+  if (!data.profile) return null;
+  const bd = parseISO(data.profile.birthDate);
+  const pending = data.vaccines.filter(v => !v.done);
+  if (!pending.length) return null;
+  const next = [...pending].sort((a, b) => a.scheduledAgeMonths - b.scheduledAgeMonths)[0];
+  return { name: next.name, dueDate: addMonths(bd, next.scheduledAgeMonths), age: next.scheduledAge };
+}
+
+export function Vaccines({ data, onRefresh, embedded }: Props) {
   const [selected, setSelected]     = useState<Vaccine | null>(null);
   const [doneForm, setDoneForm]      = useState({ date: format(new Date(), 'yyyy-MM-dd'), batch: '', notes: '' });
   const [expanded, setExpanded]      = useState<Set<string>>(new Set());
@@ -87,18 +96,52 @@ export function Vaccines({ data, onRefresh }: Props) {
 
   const doneCount  = data.vaccines.filter(v => v.done).length;
   const totalCount = data.vaccines.length;
+  const nextVaccine = getNextVaccine(data);
 
   return (
-    <div className="pb-24 fade-in">
-      <PageHeader
-        title="Vaccins"
-        subtitle="Calendrier vaccinal français"
-        action={
-          <button onClick={() => setShowAdd(true)} className="bg-gradient-to-r from-pink-400 to-purple-400 text-white p-2.5 rounded-xl">
-            <Plus size={20} />
+    <div className={embedded ? 'fade-in' : 'pb-24 fade-in'}>
+      {!embedded && (
+        <PageHeader
+          title="Vaccins"
+          subtitle="Calendrier vaccinal français"
+          action={
+            <button onClick={() => setShowAdd(true)} className="bg-gradient-to-r from-pink-400 to-purple-400 text-white p-2.5 rounded-xl">
+              <Plus size={20} />
+            </button>
+          }
+        />
+      )}
+
+      {embedded && (
+        <div className="px-4 pt-4 mb-3">
+          <button onClick={() => setShowAdd(true)}
+            className="w-full bg-gradient-to-r from-pink-400 to-purple-400 text-white py-3 rounded-2xl font-semibold flex items-center justify-center gap-2">
+            <Plus size={18} /> Ajouter un vaccin
           </button>
-        }
-      />
+        </div>
+      )}
+
+      {/* Prochain vaccin */}
+      <div className="px-4 mb-4">
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Syringe size={20} className="text-green-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500 font-medium">Prochain vaccin</p>
+              {nextVaccine ? (
+                <>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{nextVaccine.name}</p>
+                  <p className="text-xs text-gray-500">À {nextVaccine.age} — {format(nextVaccine.dueDate, 'd MMM yyyy', { locale: fr })}</p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-400">Tous les vaccins sont à jour</p>
+              )}
+            </div>
+          </div>
+        </Card>
+      </div>
 
       {/* Progress */}
       <div className="px-4 mb-4">

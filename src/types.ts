@@ -110,6 +110,22 @@ export interface MilestoneEntry {
   updatedAt?: string;
 }
 
+export type DevelopmentCategory = 'vision' | 'motricite_globale' | 'motricite_fine' | 'dents' | 'langage' | 'alimentation';
+
+export interface DevelopmentMilestone {
+  id: string;
+  category: DevelopmentCategory;
+  title: string;
+  ageRangeMonths: [number, number];
+  medianMonths?: number;
+  description: string;
+  source: string;
+  achieved: boolean;
+  achievedDate?: string;
+  notes?: string;
+  updatedAt?: string;
+}
+
 export interface AppData {
   profile: BabyProfile | null;
   growth: GrowthEntry[];
@@ -121,5 +137,6 @@ export interface AppData {
   sleep: SleepEntry[];
   feeding: FeedingEntry[];
   milestones: MilestoneEntry[];
+  development: DevelopmentMilestone[];
   deletedIds?: string[];
 }

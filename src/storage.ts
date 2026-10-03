@@ -1,6 +1,7 @@
-import type { AppData, BabyProfile, GrowthEntry, Appointment, Vaccine, ChecklistItem, NoteEntry, Document, SleepEntry, FeedingEntry, MilestoneEntry } from './types';
+import type { AppData, BabyProfile, GrowthEntry, Appointment, Vaccine, ChecklistItem, NoteEntry, Document, SleepEntry, FeedingEntry, MilestoneEntry, DevelopmentMilestone } from './types';
 import { defaultVaccines } from './data/vaccines';
 import { defaultChecklist } from './data/checklist';
+import { defaultDevelopmentMilestones } from './data/development';
 import { pushToCloud, isCloudConfigured } from './cloud';
 
 const KEY = 'carnet-bebe-data';
@@ -23,6 +24,7 @@ function load(): AppData {
         sleep:        parsed.sleep        ?? [],
         feeding:      parsed.feeding      ?? [],
         milestones:   parsed.milestones   ?? [],
+        development:  parsed.development?.length ? parsed.development : defaultDevelopmentMilestones(),
         deletedIds:   parsed.deletedIds   ?? [],
       };
     }
@@ -31,6 +33,7 @@ function load(): AppData {
     profile: null, growth: [], appointments: [],
     vaccines: defaultVaccines(), checklist: defaultChecklist(),
     notes: [], documents: [], sleep: [], feeding: [], milestones: [],
+    development: defaultDevelopmentMilestones(),
     deletedIds: [],
   };
 }
@@ -200,6 +203,13 @@ export function updateMilestone(entry: MilestoneEntry) {
 export function deleteMilestone(id: string) {
   const d = addDeleted(id);
   d.milestones = d.milestones.filter(x => x.id !== id);
+  save(d);
+}
+
+// Development milestones
+export function updateDevelopmentMilestone(entry: DevelopmentMilestone) {
+  const d = load();
+  d.development = d.development.map(x => x.id === entry.id ? { ...entry, updatedAt: now() } : x);
   save(d);
 }
 

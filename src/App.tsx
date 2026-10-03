@@ -27,6 +27,7 @@ const Appointments  = lazyWithReload(() => import('./pages/Appointments').then(m
 const Vaccines      = lazyWithReload(() => import('./pages/Vaccines').then(m => ({ default: m.Vaccines })));
 const Checklist     = lazyWithReload(() => import('./pages/Checklist').then(m => ({ default: m.Checklist })));
 const Journal       = lazyWithReload(() => import('./pages/Journal').then(m => ({ default: m.Journal })));
+const Development   = lazyWithReload(() => import('./pages/Development').then(m => ({ default: m.Development })));
 const Settings      = lazyWithReload(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 
 function PageLoader() {
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/vaccins"  element={<Vaccines       data={data} onRefresh={refresh} />} />
             <Route path="/checklist" element={<Checklist     data={data} onRefresh={refresh} />} />
             <Route path="/journal"  element={<Journal        data={data} onRefresh={refresh} />} />
+            <Route path="/developpement" element={<Development data={data} onRefresh={refresh} />} />
             <Route path="/reglages" element={<Settings       data={data} onRefresh={refresh} />} />
             {/* Compatibilité ancienne route /notes → redirige vers journal */}
             <Route path="/notes"    element={<Journal        data={data} onRefresh={refresh} />} />

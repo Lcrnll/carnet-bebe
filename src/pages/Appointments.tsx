@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Plus, Bell, BellOff, Check, X, Trash2, Calendar, ExternalLink } from 'lucide-react';
+import { Plus, Bell, BellOff, Check, X, Trash2, Calendar, ExternalLink, CalendarClock } from 'lucide-react';
 import type { AppData, Appointment } from '../types';
 import { addAppointment, updateAppointment, deleteAppointment, uid } from '../storage';
 import { getGCalEmails } from './Settings';
@@ -10,7 +10,7 @@ import { Card } from '../components/Card';
 import { Modal } from '../components/Modal';
 import { FormField, SelectField, TextareaField } from '../components/FormField';
 
-interface Props { data: AppData; onRefresh: () => void; }
+interface Props { data: AppData; onRefresh: () => void; embedded?: boolean; }
 
 const emptyForm = (): Omit<Appointment, 'id'> => ({
   title: '', date: format(new Date(), 'yyyy-MM-dd'), time: '', doctor: '',
@@ -65,7 +65,7 @@ async function requestNotification(appointment: Appointment) {
   return true;
 }
 
-export function Appointments({ data, onRefresh }: Props) {
+export function Appointments({ data, onRefresh, embedded }: Props) {
   const [showAdd, setShowAdd] = useState(false);
   const [editAppt, setEditAppt] = useState<Appointment | null>(null);
   const [form, setForm] = useState(emptyForm());
@@ -73,6 +73,10 @@ export function Appointments({ data, onRefresh }: Props) {
 
   const gcalEmails = getGCalEmails().filter(Boolean);
   const hasGcalEmails = gcalEmails.length > 0;
+
+  const nextAppt = [...data.appointments]
+    .filter(a => a.status === 'upcoming')
+    .sort((a, b) => a.date.localeCompare(b.date))[0] || null;
 
   const handleAdd = () => {
     if (!form.title || !form.date) return;
@@ -119,16 +123,52 @@ export function Appointments({ data, onRefresh }: Props) {
     .sort((a, b) => a.date.localeCompare(b.date));
 
   return (
-    <div className="pb-24 fade-in">
-      <PageHeader
-        title="Rendez-vous"
-        subtitle="Pédiatre, spécialistes, examens"
-        action={
-          <button onClick={() => { setForm(emptyForm()); setShowAdd(true); }} className="bg-gradient-to-r from-pink-400 to-purple-400 text-white p-2.5 rounded-xl">
-            <Plus size={20} />
+    <div className={embedded ? 'fade-in' : 'pb-24 fade-in'}>
+      {!embedded && (
+        <PageHeader
+          title="Rendez-vous"
+          subtitle="Pédiatre, spécialistes, examens"
+          action={
+            <button onClick={() => { setForm(emptyForm()); setShowAdd(true); }} className="bg-gradient-to-r from-pink-400 to-purple-400 text-white p-2.5 rounded-xl">
+              <Plus size={20} />
+            </button>
+          }
+        />
+      )}
+
+      {embedded && (
+        <div className="px-4 pt-4 mb-3">
+          <button onClick={() => { setForm(emptyForm()); setShowAdd(true); }}
+            className="w-full bg-gradient-to-r from-pink-400 to-purple-400 text-white py-3 rounded-2xl font-semibold flex items-center justify-center gap-2">
+            <Plus size={18} /> Nouveau rendez-vous
           </button>
-        }
-      />
+        </div>
+      )}
+
+      {/* Prochain rendez-vous */}
+      <div className="px-4 mb-4">
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <CalendarClock size={20} className="text-blue-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500 font-medium">Prochain rendez-vous</p>
+              {nextAppt ? (
+                <>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{nextAppt.title}</p>
+                  <p className="text-xs text-gray-500">
+                    {format(parseISO(nextAppt.date), 'd MMM yyyy', { locale: fr })}
+                    {nextAppt.time && ` à ${nextAppt.time}`}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-400">Aucun RDV prévu</p>
+              )}
+            </div>
+          </div>
+        </Card>
+      </div>
 
       {/* Filter tabs */}
       <div className="px-4 mb-4">

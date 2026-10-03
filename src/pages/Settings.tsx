@@ -3,6 +3,7 @@ import { Download, Upload, Trash2, Check, Share2, Wifi, WifiOff, AlertTriangle, 
 import type { AppData } from '../types';
 import { defaultVaccines } from '../data/vaccines';
 import { defaultChecklist } from '../data/checklist';
+import { defaultDevelopmentMilestones } from '../data/development';
 import {
   isCloudConfigured, getFamilyCode,
   saveCloudSettings, getCloudConfig, clearCloudSettings, pullFromCloud, pushToCloud,
@@ -134,6 +135,7 @@ export function Settings({ data, onRefresh }: Props) {
           sleep:        parsed.sleep        ?? [],
           feeding:      parsed.feeding      ?? [],
           milestones:   parsed.milestones   ?? [],
+          development:  parsed.development?.length ? parsed.development : defaultDevelopmentMilestones(),
         };
         localStorage.setItem(LOCAL_KEY, JSON.stringify(merged));
         onRefresh();
