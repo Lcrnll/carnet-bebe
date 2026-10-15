@@ -99,6 +99,7 @@ export async function pullFromCloud(): Promise<AppData | null> {
       feeding:      raw.feeding      ?? [],
       milestones:   raw.milestones   ?? [],
       development:  raw.development?.length ? raw.development : defaultDevelopmentMilestones(),
+      diversification: raw.diversification ?? [],
     };
   } catch (e) {
     console.error('[cloud] pull error', e);
@@ -140,6 +141,7 @@ export function subscribeToCloud(callback: (data: AppData) => void): Unsubscribe
         feeding:      raw.feeding      ?? [],
         milestones:   raw.milestones   ?? [],
         development:  raw.development?.length ? raw.development : defaultDevelopmentMilestones(),
+        diversification: raw.diversification ?? [],
       });
     },
     (err) => console.error('[cloud] subscribe error', err)

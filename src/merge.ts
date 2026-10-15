@@ -47,6 +47,7 @@ export function mergeData(local: AppData, cloud: AppData): AppData {
     feeding:      mergeList(local.feeding  ?? [], cloud.feeding  ?? []).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)),
     milestones:   mergeList(local.milestones ?? [], cloud.milestones ?? []).sort((a, b) => b.date.localeCompare(a.date)),
     development:  mergeList(local.development ?? [], cloud.development ?? []),
+    diversification: mergeList(local.diversification ?? [], cloud.diversification ?? []).sort((a, b) => b.date.localeCompare(a.date)),
     deletedIds:   Array.from(deletedIds),
   };
 }

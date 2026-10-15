@@ -110,6 +110,27 @@ export interface MilestoneEntry {
   updatedAt?: string;
 }
 
+export type FoodCategory = 'legumes' | 'fruits' | 'feculents' | 'proteines' | 'laitiers' | 'autres';
+export type FoodLiking = 'adore' | 'aime' | 'mitige' | 'refuse';
+export type FoodAmount = 'gout' | 'cuilleres' | 'moitie' | 'tout';
+export type FoodTexture = 'lisse' | 'ecrase' | 'morceaux';
+
+export interface FoodTrial {
+  id: string;
+  date: string;       // YYYY-MM-DD
+  foodId: string;     // id du catalogue, ou "perso:<nom>" pour un aliment ajouté à la main
+  foodName: string;
+  foodEmoji: string;
+  category: FoodCategory;
+  amount?: FoodAmount;
+  grams?: number;
+  texture?: FoodTexture;
+  liking?: FoodLiking;
+  reaction?: boolean; // rougeurs, vomissements, boutons…
+  notes?: string;
+  updatedAt?: string;
+}
+
 export type DevelopmentCategory = 'vision' | 'motricite_globale' | 'motricite_fine' | 'dents' | 'langage' | 'alimentation';
 
 export interface DevelopmentMilestone {
@@ -138,5 +159,6 @@ export interface AppData {
   feeding: FeedingEntry[];
   milestones: MilestoneEntry[];
   development: DevelopmentMilestone[];
+  diversification: FoodTrial[];
   deletedIds?: string[];
 }

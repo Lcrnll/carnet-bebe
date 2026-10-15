@@ -22,6 +22,8 @@ html { scroll-behavior: smooth; }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #f9a8d4; border-radius: 2px; }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 @keyframes slideUp {
   from { transform: translateY(24px); opacity: 0; }

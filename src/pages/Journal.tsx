@@ -4,17 +4,18 @@ import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   Plus, Search, Thermometer, FileText, Trash2, X,
-  Moon, Sun, Utensils, Star, Clock, Droplets, Edit2, ChevronDown, ChevronRight,
+  Moon, Sun, Utensils, Star, Clock, Droplets, Edit2, ChevronDown, ChevronRight, Carrot,
 } from 'lucide-react';
 import type { AppData, NoteEntry, SleepEntry, FeedingEntry, MilestoneEntry } from '../types';
 import { addNote, deleteNote, addSleep, deleteSleep, addFeeding, updateFeeding, deleteFeeding, addMilestone, deleteMilestone, uid } from '../storage';
 import { Card } from '../components/Card';
 import { Modal } from '../components/Modal';
 import { FormField, TextareaField } from '../components/FormField';
+import { DiversificationTab } from './DiversificationTab';
 
 interface Props { data: AppData; onRefresh: () => void; }
 
-type Tab = 'notes' | 'maladie' | 'sommeil' | 'alimentation' | 'jalons';
+type Tab = 'notes' | 'maladie' | 'sommeil' | 'alimentation' | 'diversification' | 'jalons';
 
 // ─── CONSTANTES ─────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'maladie',      label: 'Maladie',   icon: <Thermometer size={15} /> },
   { id: 'sommeil',      label: 'Sommeil',   icon: <Moon size={15} /> },
   { id: 'alimentation', label: 'Biberon',   icon: <Utensils size={15} /> },
+  { id: 'diversification', label: 'Diversif.', icon: <Carrot size={15} /> },
   { id: 'jalons',       label: 'Jalons',    icon: <Star size={15} /> },
 ];
 
@@ -87,7 +89,7 @@ export function Journal({ data, onRefresh }: Props) {
       <div className="bg-gradient-to-br from-purple-400 via-pink-300 to-pink-400 px-5 pt-12 pb-6 text-white">
         <p className="text-purple-100 text-sm font-medium">Journal de bébé</p>
         <h1 className="text-3xl font-bold mt-1">📓 Journal</h1>
-        <p className="text-purple-100 text-sm mt-1">Moments · Maladie · Sommeil · Alimentation · Jalons</p>
+        <p className="text-purple-100 text-sm mt-1">Moments · Maladie · Sommeil · Biberon · Diversification · Jalons</p>
       </div>
 
       {/* Tab bar */}
@@ -115,6 +117,7 @@ export function Journal({ data, onRefresh }: Props) {
         {tab === 'maladie'      && <MaladieTab      data={data} onRefresh={onRefresh} />}
         {tab === 'sommeil'      && <SommeilTab      data={data} onRefresh={onRefresh} />}
         {tab === 'alimentation' && <AlimentationTab data={data} onRefresh={onRefresh} />}
+        {tab === 'diversification' && <DiversificationTab data={data} onRefresh={onRefresh} />}
         {tab === 'jalons'       && <JalonsTab       data={data} onRefresh={onRefresh} />}
       </div>
     </div>

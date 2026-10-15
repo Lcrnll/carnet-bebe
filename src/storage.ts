@@ -1,4 +1,4 @@
-import type { AppData, BabyProfile, GrowthEntry, Appointment, Vaccine, ChecklistItem, NoteEntry, Document, SleepEntry, FeedingEntry, MilestoneEntry, DevelopmentMilestone } from './types';
+import type { AppData, BabyProfile, GrowthEntry, Appointment, Vaccine, ChecklistItem, NoteEntry, Document, SleepEntry, FeedingEntry, MilestoneEntry, DevelopmentMilestone, FoodTrial } from './types';
 import { defaultVaccines } from './data/vaccines';
 import { defaultChecklist } from './data/checklist';
 import { defaultDevelopmentMilestones } from './data/development';
@@ -25,6 +25,7 @@ function load(): AppData {
         feeding:      parsed.feeding      ?? [],
         milestones:   parsed.milestones   ?? [],
         development:  parsed.development?.length ? parsed.development : defaultDevelopmentMilestones(),
+        diversification: parsed.diversification ?? [],
         deletedIds:   parsed.deletedIds   ?? [],
       };
     }
@@ -34,6 +35,7 @@ function load(): AppData {
     vaccines: defaultVaccines(), checklist: defaultChecklist(),
     notes: [], documents: [], sleep: [], feeding: [], milestones: [],
     development: defaultDevelopmentMilestones(),
+    diversification: [],
     deletedIds: [],
   };
 }
@@ -210,6 +212,23 @@ export function deleteMilestone(id: string) {
 export function updateDevelopmentMilestone(entry: DevelopmentMilestone) {
   const d = load();
   d.development = d.development.map(x => x.id === entry.id ? { ...entry, updatedAt: now() } : x);
+  save(d);
+}
+
+// Diversification
+export function addFoodTrial(entry: FoodTrial) {
+  const d = load();
+  d.diversification = [{ ...entry, updatedAt: now() }, ...d.diversification];
+  save(d);
+}
+export function updateFoodTrial(entry: FoodTrial) {
+  const d = load();
+  d.diversification = d.diversification.map(x => x.id === entry.id ? { ...entry, updatedAt: now() } : x);
+  save(d);
+}
+export function deleteFoodTrial(id: string) {
+  const d = addDeleted(id);
+  d.diversification = d.diversification.filter(x => x.id !== id);
   save(d);
 }
 

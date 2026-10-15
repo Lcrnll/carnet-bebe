@@ -136,6 +136,7 @@ export function Settings({ data, onRefresh }: Props) {
           feeding:      parsed.feeding      ?? [],
           milestones:   parsed.milestones   ?? [],
           development:  parsed.development?.length ? parsed.development : defaultDevelopmentMilestones(),
+          diversification: parsed.diversification ?? [],
         };
         localStorage.setItem(LOCAL_KEY, JSON.stringify(merged));
         onRefresh();
