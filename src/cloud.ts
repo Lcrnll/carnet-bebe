@@ -78,6 +78,47 @@ function getDb(): Firestore | null {
   }
 }
 
+/*
+ * Version du format des données. À INCRÉMENTER à chaque ajout d'un champ
+ * dans AppData. Un appareil qui voit dans le cloud une version supérieure à la
+ * sienne tourne sur une ancienne version de l'app : il ne doit plus rien
+ * envoyer (il effacerait les champs qu'il ne connaît pas) et se recharge.
+ *   1 = avant la diversification · 2 = diversification + garde-fou de version
+ */
+export const SCHEMA_VERSION = 2;
+
+let _staleClient = false;
+export function isStaleClient() { return _staleClient; }
+
+/** Détecte une version d'app périmée ; recharge la page une fois pour récupérer la nouvelle. */
+export function checkCloudVersion(cloud: Pick<AppData, 'schemaVersion'>): boolean {
+  if ((cloud.schemaVersion ?? 0) <= SCHEMA_VERSION) return true;
+  _staleClient = true;
+  if (!sessionStorage.getItem('schema-reload')) {
+    sessionStorage.setItem('schema-reload', '1');
+    window.location.reload();
+  }
+  return false;
+}
+
+function normalize(raw: Partial<AppData>): AppData {
+  return {
+    ...raw, // conserve les champs inconnus de cette version
+    profile:      raw.profile      ?? null,
+    growth:       raw.growth       ?? [],
+    appointments: raw.appointments ?? [],
+    vaccines:     raw.vaccines?.length  ? raw.vaccines  : defaultVaccines(),
+    checklist:    raw.checklist?.length ? raw.checklist : defaultChecklist(),
+    notes:        raw.notes        ?? [],
+    documents:    raw.documents    ?? [],
+    sleep:        raw.sleep        ?? [],
+    feeding:      raw.feeding      ?? [],
+    milestones:   raw.milestones   ?? [],
+    development:  raw.development?.length ? raw.development : defaultDevelopmentMilestones(),
+    diversification: raw.diversification ?? [],
+  };
+}
+
 /* ── Pull latest data from Firestore (one-shot read) ── */
 export async function pullFromCloud(): Promise<AppData | null> {
   const db = getDb();
@@ -86,21 +127,7 @@ export async function pullFromCloud(): Promise<AppData | null> {
   try {
     const snap = await getDoc(doc(db, 'familles', code));
     if (!snap.exists()) return null;
-    const raw = snap.data() as Partial<AppData>;
-    return {
-      profile:      raw.profile      ?? null,
-      growth:       raw.growth       ?? [],
-      appointments: raw.appointments ?? [],
-      vaccines:     raw.vaccines?.length  ? raw.vaccines  : defaultVaccines(),
-      checklist:    raw.checklist?.length ? raw.checklist : defaultChecklist(),
-      notes:        raw.notes        ?? [],
-      documents:    raw.documents    ?? [],
-      sleep:        raw.sleep        ?? [],
-      feeding:      raw.feeding      ?? [],
-      milestones:   raw.milestones   ?? [],
-      development:  raw.development?.length ? raw.development : defaultDevelopmentMilestones(),
-      diversification: raw.diversification ?? [],
-    };
+    return normalize(snap.data() as Partial<AppData>);
   } catch (e) {
     console.error('[cloud] pull error', e);
     return null;
@@ -111,12 +138,63 @@ export async function pullFromCloud(): Promise<AppData | null> {
 export async function pushToCloud(data: AppData): Promise<void> {
   const db = getDb();
   const code = getFamilyCode();
-  if (!db || !code) return;
+  if (!db || !code || _staleClient) return;
   try {
-    await setDoc(doc(db, 'familles', code), JSON.parse(JSON.stringify(data)));
+    const payload = JSON.parse(JSON.stringify({ ...data, schemaVersion: SCHEMA_VERSION }));
+    // mergeFields : chaque champ envoyé est remplacé en entier, mais un champ
+    // absent de `data` (inconnu de cette version) n'est jamais supprimé du cloud.
+    await setDoc(doc(db, 'familles', code), payload, { mergeFields: Object.keys(payload) });
+    await saveCloudBackup(db, code, payload);
   } catch (e) {
     console.error('[cloud] push error', e);
   }
+}
+
+/* ── Sauvegardes quotidiennes dans le cloud ──
+ * Un document par jour : familles/<code>--sauvegarde--AAAA-MM-JJ.
+ * On garde la version la plus complète de la journée (jamais écrasée par une
+ * version plus pauvre), pour pouvoir revenir en arrière après une perte. */
+const BACKUP_SEP = '--sauvegarde--';
+let _lastBackupCheck = '';
+
+function countEntries(d: Partial<AppData>): number {
+  return (['growth', 'appointments', 'notes', 'documents', 'sleep', 'feeding', 'milestones', 'diversification'] as const)
+    .reduce((acc, k) => acc + ((d[k] as unknown[] | undefined)?.length ?? 0), 0);
+}
+
+async function saveCloudBackup(db: Firestore, code: string, payload: AppData) {
+  const day = new Date().toISOString().slice(0, 10);
+  const count = countEntries(payload);
+  const key = `${day}:${count}`;
+  if (_lastBackupCheck === key) return;
+  _lastBackupCheck = key;
+  const ref = doc(db, 'familles', `${code}${BACKUP_SEP}${day}`);
+  const existing = await getDoc(ref);
+  if (existing.exists() && countEntries(existing.data() as Partial<AppData>) > count) return;
+  await setDoc(ref, { ...payload, backupOf: code, backupAt: new Date().toISOString() });
+}
+
+export interface CloudBackup { day: string; data: AppData; count: number; }
+
+/** Sauvegardes cloud des `days` derniers jours (les plus récentes d'abord). */
+export async function listCloudBackups(days = 30): Promise<CloudBackup[]> {
+  const db = getDb();
+  const code = getFamilyCode();
+  if (!db || !code) return [];
+  const out: CloudBackup[] = [];
+  const dates = Array.from({ length: days }, (_, i) =>
+    new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10));
+  await Promise.all(dates.map(async day => {
+    try {
+      const snap = await getDoc(doc(db, 'familles', `${code}${BACKUP_SEP}${day}`));
+      if (!snap.exists()) return;
+      const raw = snap.data() as Partial<AppData> & { backupOf?: string; backupAt?: string };
+      delete raw.backupOf; delete raw.backupAt;
+      const data = normalize(raw);
+      out.push({ day, data, count: countEntries(data) });
+    } catch (e) { console.error('[cloud] backup read error', e); }
+  }));
+  return out.sort((a, b) => b.day.localeCompare(a.day));
 }
 
 /* ── Listen to Firestore changes (real-time) ── */
@@ -128,21 +206,7 @@ export function subscribeToCloud(callback: (data: AppData) => void): Unsubscribe
     doc(db, 'familles', code),
     (snap) => {
       if (!snap.exists()) return;
-      const raw = snap.data() as Partial<AppData>;
-      callback({
-        profile:      raw.profile      ?? null,
-        growth:       raw.growth       ?? [],
-        appointments: raw.appointments ?? [],
-        vaccines:     raw.vaccines?.length ? raw.vaccines : defaultVaccines(),
-        checklist:    raw.checklist?.length ? raw.checklist : defaultChecklist(),
-        notes:        raw.notes        ?? [],
-        documents:    raw.documents    ?? [],
-        sleep:        raw.sleep        ?? [],
-        feeding:      raw.feeding      ?? [],
-        milestones:   raw.milestones   ?? [],
-        development:  raw.development?.length ? raw.development : defaultDevelopmentMilestones(),
-        diversification: raw.diversification ?? [],
-      });
+      callback(normalize(snap.data() as Partial<AppData>));
     },
     (err) => console.error('[cloud] subscribe error', err)
   );

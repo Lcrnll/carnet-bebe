@@ -36,6 +36,9 @@ export function mergeData(local: AppData, cloud: AppData): AppData {
   }
 
   return {
+    // Champs inconnus de cette version : conservés tels quels (local prioritaire)
+    ...cloud,
+    ...local,
     profile,
     growth:       mergeList(local.growth,       cloud.growth      ).sort((a, b) => b.date.localeCompare(a.date)),
     appointments: mergeList(local.appointments, cloud.appointments).sort((a, b) => a.date.localeCompare(b.date)),

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { AppData } from '../types';
 import { getData } from '../storage';
-import { subscribeToCloud, pullFromCloud, pushToCloud, isCloudConfigured } from '../cloud';
+import { subscribeToCloud, pullFromCloud, pushToCloud, isCloudConfigured, checkCloudVersion } from '../cloud';
 import { mergeData } from '../merge';
 
 const LOCAL_KEY = 'carnet-bebe-data';
@@ -11,6 +11,9 @@ async function syncAndApply(
   cloudData: AppData,
   setData: (d: AppData) => void
 ) {
+  // Cloud écrit par une version plus récente de l'app : on ne touche à rien
+  // (on effacerait ce qu'on ne connaît pas) et on se recharge.
+  if (!checkCloudVersion(cloudData)) return;
   const localData = getData();
   const merged = mergeData(localData, cloudData);
   localStorage.setItem(LOCAL_KEY, JSON.stringify(merged));

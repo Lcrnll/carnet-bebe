@@ -3,6 +3,7 @@ import { defaultVaccines } from './data/vaccines';
 import { defaultChecklist } from './data/checklist';
 import { defaultDevelopmentMilestones } from './data/development';
 import { pushToCloud, isCloudConfigured } from './cloud';
+import { saveLocalBackup } from './backup';
 
 const KEY = 'carnet-bebe-data';
 
@@ -14,6 +15,9 @@ function load(): AppData {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<AppData>;
       return {
+        // Conserve les champs inconnus de cette version (ajoutés par une
+        // version plus récente) pour ne jamais les effacer en réécrivant.
+        ...parsed,
         profile:      parsed.profile      ?? null,
         growth:       parsed.growth       ?? [],
         appointments: parsed.appointments ?? [],
@@ -42,6 +46,7 @@ function load(): AppData {
 
 function save(data: AppData) {
   localStorage.setItem(KEY, JSON.stringify(data));
+  saveLocalBackup(data);
   if (isCloudConfigured()) {
     pushToCloud(data).catch(console.error);
   }

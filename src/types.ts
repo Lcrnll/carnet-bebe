@@ -161,4 +161,6 @@ export interface AppData {
   development: DevelopmentMilestone[];
   diversification: FoodTrial[];
   deletedIds?: string[];
+  /** Version du format des données (voir SCHEMA_VERSION dans cloud.ts). */
+  schemaVersion?: number;
 }

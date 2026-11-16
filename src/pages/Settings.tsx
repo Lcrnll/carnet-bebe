@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Download, Upload, Trash2, Check, Share2, Wifi, WifiOff, AlertTriangle, Calendar } from 'lucide-react';
+import { Download, Upload, Trash2, Check, Share2, Wifi, WifiOff, AlertTriangle, Calendar, History } from 'lucide-react';
 import type { AppData } from '../types';
 import { defaultVaccines } from '../data/vaccines';
 import { defaultChecklist } from '../data/checklist';
@@ -7,7 +7,10 @@ import { defaultDevelopmentMilestones } from '../data/development';
 import {
   isCloudConfigured, getFamilyCode,
   saveCloudSettings, getCloudConfig, clearCloudSettings, pullFromCloud, pushToCloud,
+  checkCloudVersion, listCloudBackups,
 } from '../cloud';
+import { getData } from '../storage';
+import { getLocalBackups } from '../backup';
 import { mergeData } from '../merge';
 import { Card } from '../components/Card';
 import { PageHeader } from '../components/PageHeader';
@@ -76,13 +79,15 @@ export function Settings({ data, onRefresh }: Props) {
     onRefresh();
   };
 
-  /* ── Sync manuelle : tire depuis le cloud (ne pousse pas) ── */
+  /* ── Sync manuelle : fusionne cloud + local (ne remplace jamais) ── */
   const handleManualSync = async () => {
     setSyncing(true);
     try {
       const cloudData = await pullFromCloud();
-      if (cloudData) {
-        localStorage.setItem('carnet-bebe-data', JSON.stringify(cloudData));
+      if (cloudData && checkCloudVersion(cloudData)) {
+        const merged = mergeData(getData(), cloudData);
+        localStorage.setItem(LOCAL_KEY, JSON.stringify(merged));
+        await pushToCloud(merged);
         onRefresh();
         setSyncOk(true);
       } else {
@@ -124,7 +129,7 @@ export function Settings({ data, onRefresh }: Props) {
       try {
         const parsed = JSON.parse(ev.target?.result as string) as Partial<AppData>;
         if (!parsed.profile && !parsed.growth) throw new Error('invalide');
-        const merged: AppData = {
+        const imported: AppData = {
           profile:      parsed.profile      ?? null,
           growth:       parsed.growth       ?? [],
           appointments: parsed.appointments ?? [],
@@ -138,14 +143,35 @@ export function Settings({ data, onRefresh }: Props) {
           development:  parsed.development?.length ? parsed.development : defaultDevelopmentMilestones(),
           diversification: parsed.diversification ?? [],
         };
-        localStorage.setItem(LOCAL_KEY, JSON.stringify(merged));
-        onRefresh();
+        restore(imported);
         setImportSuccess(true);
         setTimeout(() => setImportSuccess(false), 3000);
       } catch { setImportError('Fichier invalide.'); }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  /* ── Restauration : fusion (union) avec les données actuelles ──
+   * Rien n'est supprimé : on rajoute ce qui manque. Les éléments supprimés
+   * volontairement depuis la sauvegarde ne réapparaissent pas (deletedIds). */
+  const restore = (backup: AppData) => {
+    const merged = mergeData(getData(), { ...backup, deletedIds: [] });
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(merged));
+    if (configured) pushToCloud(merged).catch(console.error);
+    onRefresh();
+  };
+
+  const [backups, setBackups] = useState<{ day: string; data: AppData; count: number; source: string }[] | null>(null);
+  const [restoredDay, setRestoredDay] = useState('');
+  const loadBackups = async () => {
+    setBackups([]);
+    const cloud = configured ? await listCloudBackups() : [];
+    const local = getLocalBackups();
+    setBackups([
+      ...cloud.map(b => ({ ...b, source: 'Cloud' })),
+      ...local.map(b => ({ ...b, source: 'Cet appareil' })),
+    ].sort((a, b) => b.day.localeCompare(a.day)));
   };
 
   /* ── Google Calendar emails ── */
@@ -168,6 +194,7 @@ export function Settings({ data, onRefresh }: Props) {
     { label: 'Vaccins complétés',      value: `${data.vaccines.filter(v => v.done).length} / ${data.vaccines.length}` },
     { label: 'Notes & symptômes',      value: data.notes.length },
     { label: 'Documents',              value: data.documents.length },
+    { label: 'Aliments (diversification)', value: data.diversification.length },
   ];
 
   return (
@@ -254,6 +281,39 @@ export function Settings({ data, onRefresh }: Props) {
             className="w-full flex items-center justify-center gap-2 bg-blue-50 text-blue-500 border border-blue-100 py-2 rounded-xl text-sm font-medium">
             <Upload size={15} /> Importer un fichier JSON
           </button>
+        </Card>
+      </div>
+
+      {/* ── Sauvegardes automatiques ── */}
+      <div className="px-4 mb-3">
+        <Card className="p-4">
+          <h3 className="font-semibold text-gray-800 mb-1">🛟 Sauvegardes automatiques</h3>
+          <p className="text-xs text-gray-500 mb-3">
+            Une copie par jour (cloud et appareil). Restaurer rajoute ce qui manque, sans rien effacer.
+          </p>
+          {backups === null ? (
+            <button onClick={loadBackups}
+              className="w-full flex items-center justify-center gap-2 bg-amber-50 text-amber-600 border border-amber-100 py-2 rounded-xl text-sm font-medium">
+              <History size={15} /> Voir les sauvegardes
+            </button>
+          ) : backups.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-2">Aucune sauvegarde pour l'instant.</p>
+          ) : (
+            <div className="space-y-2">
+              {backups.map(b => (
+                <div key={b.source + b.day} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-800">{new Date(b.day + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}</p>
+                    <p className="text-xs text-gray-400">{b.source} · {b.count} entrées · {b.data.diversification?.length ?? 0} aliments</p>
+                  </div>
+                  <button onClick={() => { restore(b.data); setRestoredDay(b.source + b.day); }}
+                    className="text-xs font-semibold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg flex-shrink-0">
+                    {restoredDay === b.source + b.day ? '✓ Restauré' : 'Restaurer'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       </div>
 
